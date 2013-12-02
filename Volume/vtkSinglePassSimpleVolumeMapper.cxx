@@ -22,6 +22,9 @@ void vtkSinglePassSimpleVolumeMapper::PrintSelf(ostream &os, vtkIndent indent)
 
 void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer *ren, vtkVolume *vol)
 {
+  vtkImageData* input = this->GetInput();
+
+
 }
 
 
