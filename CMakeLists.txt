@@ -44,5 +44,6 @@ find_package(VTK NO_MODULE REQUIRED COMPONENTS ${VTK_REQUIRED_COMPONENTS})
 include(${VTK_USE_FILE})
 
 add_subdirectory(Volume)
+add_subdirectory(OpenGL)
 add_subdirectory(Testing)
 add_subdirectory(Examples)
