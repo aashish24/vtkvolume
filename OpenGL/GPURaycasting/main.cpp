@@ -273,6 +273,19 @@ void OnRender() {
         shader.Use();
             //pass shader uniforms
             glUniformMatrix4fv(shader("MVP"), 1, GL_FALSE, glm::value_ptr(MVP));
+
+              int i,j;
+              std::cerr << "matrix " << std::endl;
+              for (j=0; j<4; j++){
+                for (i=0; i<4; i++){
+                 std::cerr << MV[i][j] <<  " ";
+              }
+
+
+              std::cerr << std::endl;
+             }
+
+
             glUniform3fv(shader("camPos"), 1, &(camPos.x));
                 //render the cube
                 glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);

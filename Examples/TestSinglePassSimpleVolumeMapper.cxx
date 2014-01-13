@@ -34,51 +34,26 @@
 #include "vtkImageData.h"
 #include "vtkPointData.h"
 #include "vtkDataArray.h"
+#include "vtkRTAnalyticSource.h"
+#include "vtkNew.h"
+#include "vtkSphereSource.h"
+#include "vtkPolyDataMapper.h"
 
 int main(int argc, char *argv[])
 {
   cout << "CTEST_FULL_OUTPUT (Avoid ctest truncation of output)" << endl;
 
-  // Create a spherical implicit function.
-  vtkSphere* shape = vtkSphere::New();
-  shape->SetRadius(0.1);
-  shape->SetCenter(0.0,0.0,0.0);
-
-  vtkSampleFunction* source=vtkSampleFunction::New();
-  source->SetImplicitFunction(shape);
-  shape->Delete();
-  source->SetOutputScalarTypeToDouble();
-  source->SetSampleDimensions(127,127,127); // intentional NPOT dimensions.
-  source->SetModelBounds(-1.0,1.0,-1.0,1.0,-1.0,1.0);
-  source->SetCapping(false);
-  source->SetComputeNormals(false);
-  source->SetScalarArrayName("values");
+  vtkRTAnalyticSource* source=vtkRTAnalyticSource::New();
+  source->SetCenter(0.0, 0.0, 0.0);
+  source->SetWholeExtent(-1, 1, -1, 1, -1, 1);
   source->Update();
 
-  vtkDataArray *a=source->GetOutput()->GetPointData()->GetScalars("values");
-  double range[2];
-  a->GetRange(range);
-
-  vtkImageShiftScale* t = vtkImageShiftScale::New();
-  t->SetInputConnection(source->GetOutputPort());
-  source->Delete();
-  t->SetShift(-range[0]);
-  double magnitude=range[1]-range[0];
-  if(magnitude==0.0)
-    {
-    magnitude=1.0;
-    }
-  t->SetScale(255.0/magnitude);
-  t->SetOutputScalarTypeToUnsignedChar();
-  t->Update();
-
-  vtkRenderWindow *renWin=vtkRenderWindow::New();
-  vtkRenderer *ren1=vtkRenderer::New();
-  ren1->SetBackground(0.1,0.4,0.2);
+  vtkRenderWindow* renWin=vtkRenderWindow::New();
+  vtkRenderer *ren1 = vtkRenderer::New();
 
   renWin->AddRenderer(ren1);
   ren1->Delete();
-  renWin->SetSize(301,300); // intentional odd and NPOT  width/height
+  renWin->SetSize(300,300); // intentional odd and NPOT  width/height
 
   vtkRenderWindowInteractor *iren=vtkRenderWindowInteractor::New();
   iren->SetRenderWindow(renWin);
@@ -93,69 +68,34 @@ int main(int argc, char *argv[])
   volumeMapper = vtkSinglePassSimpleVolumeMapper::New();
 
   // TODO Fix this
-  //volumeMapper->SetBlendModeToComposite(); // composite first
-
-  volumeMapper->SetInputConnection(t->GetOutputPort());
+  volumeMapper->SetBlendModeToComposite(); // composite first
+  volumeMapper->SetInputConnection(source->GetOutputPort());
 
   volumeProperty=vtkVolumeProperty::New();
   volumeProperty->ShadeOff();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
-  // TODO Fix this
-//  vtkPiecewiseFunction* additiveOpacity = vtkPiecewiseFunction::New();
-//  additiveOpacity->AddPoint(0.0,0.0);
-//  additiveOpacity->AddPoint(200.0,0.5);
-//  additiveOpacity->AddPoint(200.1,1.0);
-//  additiveOpacity->AddPoint(255.0,1.0);
-
-//  vtkPiecewiseFunction *compositeOpacity = vtkPiecewiseFunction::New();
-//  compositeOpacity->AddPoint(0.0,0.0);
-//  compositeOpacity->AddPoint(80.0,1.0);
-//  compositeOpacity->AddPoint(80.1,0.0);
-//  compositeOpacity->AddPoint(255.0,0.0);
-//  volumeProperty->SetScalarOpacity(compositeOpacity); // composite first.
-
-//  vtkColorTransferFunction *color=vtkColorTransferFunction::New();
-//  color->AddRGBPoint(0.0  ,0.0,0.0,1.0);
-//  color->AddRGBPoint(40.0  ,1.0,0.0,0.0);
-//  color->AddRGBPoint(255.0,1.0,1.0,1.0);
-//  volumeProperty->SetColor(color);
-//  color->Delete();
-
   volume = vtkVolume::New();
   volume->SetMapper(volumeMapper);
-//  volume->SetProperty(volumeProperty);
+  volume->SetProperty(volumeProperty);
   ren1->AddViewProp(volume);
 
-  // TODO Fix this
-//  int valid = volumeMapper->IsRenderSupported(renWin, volumeProperty);
 
-  int valid = 1;
-  int retVal;
-  if(valid)
-    {
-    ren1->ResetCamera();
+  vtkNew<vtkSphereSource> sps;
+  vtkNew<vtkPolyDataMapper> spm;
+  vtkNew<vtkActor> spa;
+  spa->SetMapper(spm.GetPointer());
+  spm->SetInputConnection(sps->GetOutputPort());
+  ren1->AddActor(spa.GetPointer());
 
-    // TODO Fix this
-//    // Render composite.
-//    renWin->Render();
-
-//    // Switch to Additive
-//    volumeMapper->SetBlendModeToAdditive();
-//    volumeProperty->SetScalarOpacity(additiveOpacity);
-    renWin->Render();
-    iren->Start();
-    }
+  ren1->ResetCamera();
+  renWin->Render();
+  ren1->ResetCamera();
+  iren->Start();
 
   volumeMapper->Delete();
   volumeProperty->Delete();
   volume->Delete();
   iren->Delete();
-  t->Delete();
-
-//  additiveOpacity->Delete();
-//  compositeOpacity->Delete();
-
-  return !((retVal == vtkTesting::PASSED) || (retVal == vtkTesting::DO_INTERACTOR));
 }
 

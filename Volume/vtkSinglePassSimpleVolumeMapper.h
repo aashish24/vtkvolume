@@ -17,6 +17,9 @@ class vtkSinglePassSimpleVolumeMapper : public vtkVolumeMapper
     vtkSinglePassSimpleVolumeMapper();
     ~vtkSinglePassSimpleVolumeMapper();
 
+    class vtkInternal;
+    vtkInternal* Implementation;
+
 private:
     vtkSinglePassSimpleVolumeMapper(const vtkSinglePassSimpleVolumeMapper&);  // Not implemented.
     void operator=(const vtkSinglePassSimpleVolumeMapper&);  // Not implemented.

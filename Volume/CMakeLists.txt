@@ -1,4 +1,5 @@
+set(_srcs vtkSinglePassSimpleVolumeMapper.cxx GLSLShader.cxx)
 
-set(_srcs vtkSinglePassSimpleVolumeMapper.cxx)
+add_library(vtkVolume ${_srcs})
 
-add_library(vtkVolume vtkSinglePassSimpleVolumeMapper.cxx)
+target_link_libraries(vtkVolume GLEW)
