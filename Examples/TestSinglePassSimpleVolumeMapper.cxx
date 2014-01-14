@@ -45,21 +45,24 @@ int main(int argc, char *argv[])
 
   vtkRTAnalyticSource* source=vtkRTAnalyticSource::New();
   source->SetCenter(0.0, 0.0, 0.0);
-  source->SetWholeExtent(-1, 1, -1, 1, -1, 1);
+  source->SetWholeExtent(-2, 2, -2, 2, -2, 2);
   source->Update();
 
   vtkRenderWindow* renWin=vtkRenderWindow::New();
   vtkRenderer *ren1 = vtkRenderer::New();
+  ren1->SetBackground(0.2, 0.2, 0.5);
 
+  // intentional odd and NPOT  width/height
   renWin->AddRenderer(ren1);
   ren1->Delete();
-  renWin->SetSize(300,300); // intentional odd and NPOT  width/height
+  renWin->SetSize(300, 300);
 
   vtkRenderWindowInteractor *iren=vtkRenderWindowInteractor::New();
   iren->SetRenderWindow(renWin);
   renWin->Delete();
 
-  renWin->Render(); // make sure we have an OpenGL context.
+  // make sure we have an OpenGL context.
+  renWin->Render();
 
   vtkSinglePassSimpleVolumeMapper* volumeMapper;
   vtkVolumeProperty* volumeProperty;
@@ -79,14 +82,6 @@ int main(int argc, char *argv[])
   volume->SetMapper(volumeMapper);
   volume->SetProperty(volumeProperty);
   ren1->AddViewProp(volume);
-
-
-  vtkNew<vtkSphereSource> sps;
-  vtkNew<vtkPolyDataMapper> spm;
-  vtkNew<vtkActor> spa;
-  spa->SetMapper(spm.GetPointer());
-  spm->SetInputConnection(sps->GetOutputPort());
-  ren1->AddActor(spa.GetPointer());
 
   ren1->ResetCamera();
   renWin->Render();
