@@ -24,6 +24,32 @@ vtkStandardNewMacro(vtkSinglePassSimpleVolumeMapper);
 // Remove this afterwards
 #define GL_CHECK_ERRORS assert(glGetError()== GL_NO_ERROR);
 
+// Class that implements control point for the transfer function
+class TransferControlPoint
+{
+public:
+    float Color[4];
+    int IsoValue;
+
+    void TransferControlPoint(float r, float g, float b, int isovalue)
+    {
+      Color.X = r;
+      Color.Y = g;
+      Color.Z = b;
+      Color.W = 1.0f;
+      IsoValue = isovalue;
+    }
+
+    void TransferControlPoint(float alpha, int isovalue)
+    {
+      Color.X = 0.0f;
+      Color.Y = 0.0f;
+      Color.Z = 0.0f;
+      Color.W = alpha;
+      IsoValue = isovalue;
+    }
+};
+
 // Class that hides implementation details
 class vtkSinglePassSimpleVolumeMapper::vtkInternal
 {
@@ -41,6 +67,7 @@ public:
   bool LoadVolume(vtkImageData* imageData);
   bool IsVolmeLoaded();
   bool IsInitialized();
+  void ComputeTransferFunction();
 
   vtkSinglePassSimpleVolumeMapper* Parent;
 
@@ -52,14 +79,72 @@ public:
   GLuint cubeIndicesID;
   GLSLShader shader;
 
+  GLuint TransferFunc;
+
   int CellFlag;
   int TextureSize[3];
   int TextureExtents[6];
+
+  std::vector<TransferControlPoint> ColorKnots;
+  std::vector<TransferControlPoint> AlphaKnots;
 };
+
+// Helper method for computing the transfer function
+void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
+{
+  // Initialize the cubic spline for the transfer function
+  float transferFunc[256*4];
+
+  // Fit a cubic spline for the transfer function
+  std::vector<Cubic> colorCubic = this->CalculateCubicSpline(ColorKnots.size() - 1, ColorKnots);
+  std::vector<Cubic> alphaCubic = this->CalculateCubicSpline(AlphaKnots.size() - 1, AlphaKnots);
+
+  int numTF = 0;
+  for (int i = 0; i < ColorKnots.size() - 1; i++)
+    {
+    // Compute steps
+    int steps = mColorKnots[i + 1].IsoValue - mColorKnots[i].IsoValue;
+
+    // Now compute the color
+    for (int j = 0; j < steps; j++)
+      {
+      float k = (float)j / (float)(steps - 1);
+
+      std::vector<float> color = colorCubic[i].GetPointOnSpline(k);
+      for (int k = 0; k < 4; ++k)
+        {
+        transferFunc[numTF++] = color[k];
+        }
+      }
+    }
+
+  numTF = 0;
+  for (int i = 0; i < AlphaKnots.Count - 1; i++)
+    {
+    int steps = AlphaKnots[i + 1].IsoValue - AlphaKnots[i].IsoValue;
+    for (int j = 0; j < steps; j++)
+      {
+      float k = (float)j / (float)(steps - 1);
+
+      std::vector<float> color = colorCubic[i].GetPointOnSpline(k);
+      transferFunc[numTF + (j+1) * 3 + 1] = color[3];
+    }
+
+  // Generate OpenGL texture
+  glGenTextures(1, &this->TransferFunc);
+  glBindTexture(GL_TEXTURE_1D, this->TransferFunc);
+
+  // Set the texture parameters
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_R, GL_CLAMP);
+
+
+}
 
 
 bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
-  {
+{
   //volume texture ID
   GLuint textureID;
 
@@ -92,7 +177,7 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
   double scale=1.0;
   int needTypeConversion=0;
 
-  vtkDataArray *scalars = this->Parent->GetScalars(imageData,
+  vtkDataArray* scalars = this->Parent->GetScalars(imageData,
                           this->Parent->ScalarMode,
                           this->Parent->ArrayAccessMode,
                           this->Parent->ArrayId,
@@ -231,17 +316,11 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
             << this->TextureExtents[4] << " "
             << this->TextureExtents[5] << std::endl;
 
-  int* dim = imageData->GetDimensions();
-//  void *dataPtr=scalars->GetVoidPointer(
-//    ((this->TextureExtents[4]*(dim[1]-CellFlag)+this->TextureExtents[2])
-//     *(dim[0]-CellFlag)+this->TextureExtents[0])
-//    *scalars->GetNumberOfComponents());
-
   void* dataPtr = scalars->GetVoidPointer(0);
-  int i=0;
-  while(i<3)
+  int i = 0;
+  while(i < 3)
     {
-    this->TextureSize[i]=this->TextureExtents[2*i+1]-this->TextureExtents[2*i]+1;
+    this->TextureSize[i] = this->TextureExtents[2*i+1]-this->TextureExtents[2*i]+1;
     ++i;
     }
 
@@ -256,11 +335,10 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
 
   GL_CHECK_ERRORS
 
-  //generate mipmaps
+  // Generate mipmaps
   glGenerateMipmap(GL_TEXTURE_3D);
 
   this->VolmeLoaded = true;
-
   return this->VolmeLoaded;
 }
 
@@ -320,11 +398,11 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     GL_CHECK_ERRORS
 
     //output hardware information
-    cout<<"\tUsing GLEW "<<glewGetString(GLEW_VERSION)<<endl;
-    cout<<"\tVendor: "<<glGetString (GL_VENDOR)<<endl;
-    cout<<"\tRenderer: "<<glGetString (GL_RENDERER)<<endl;
-    cout<<"\tVersion: "<<glGetString (GL_VERSION)<<endl;
-    cout<<"\tGLSL: "<<glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
+    cout<<"\tUsing GLEW "<< glewGetString(GLEW_VERSION)<<endl;
+    cout<<"\tVendor: "<< glGetString (GL_VENDOR)<<endl;
+    cout<<"\tRenderer: "<< glGetString (GL_RENDERER)<<endl;
+    cout<<"\tVersion: "<< glGetString (GL_VERSION)<<endl;
+    cout<<"\tGLSL: "<< glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
     }
 
   if (!this->Implementation->IsVolmeLoaded())
@@ -416,14 +494,16 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     this->Implementation->Initialized = true;
     }
 
+  // Enable blending
   glEnable(GL_BLEND);
   glBindVertexArray(this->Implementation->cubeVAOID);
 
+  // Use the shader
   this->Implementation->shader.Use();
 
   GL_CHECK_ERRORS
 
-  // pass shader uniforms
+  // Pass shader uniforms
   double* tmpPos = ren->GetActiveCamera()->GetPosition();
   float pos[3] = {tmpPos[0], tmpPos[1], tmpPos[2]};
 
@@ -432,9 +512,9 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   ren->ComputeAspect();
   ren->GetAspect(aspect);
 
-  vtkMatrix4x4* projMat = ren->GetActiveCamera()->GetCompositeProjectionTransformMatrix(aspect[0], -1, 1);
+  vtkMatrix4x4* projMat = ren->GetActiveCamera()->
+    GetCompositeProjectionTransformMatrix(aspect[0], -1, 1);
   projMat->Transpose();
-
 
   float mvp[16];
   for (int i = 0; i < 4; ++i)
@@ -444,11 +524,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       mvp[i * 4 + j] = projMat->Element[i][j];
       }
     }
-
-//    std::cerr << "this->Implementation->shader(MVP) " << this->Implementation->shader("MVP") << std::endl;
-//    std::cerr << "mvProjMat->Element[0][0] " << mvProjMat->Element[0][0] << std::endl;
-//    std::cerr << "pos " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
-//    std::cerr << "foc " << tmpfoc[0] << " " << tmpfoc[1] << " " << tmpfoc[2] << std::endl;
 
   glUniformMatrix4fv(this->Implementation->shader("MVP"), 1, GL_FALSE, &(mvp[0]));
   glUniform3fv(this->Implementation->shader("camPos"), 1, &(pos[0]));
