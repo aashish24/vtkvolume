@@ -5,16 +5,33 @@ layout(location = 0) out vec4 dst;	//fragment shader output
 smooth in vec3 vUV;				//3D texture coordinates form vertex shader
                 //interpolated by rasterizer
 
-//uniforms
-uniform sampler3D	volume;		//volume dataset
-uniform vec3		camPos;		//camera position
-uniform vec3		step_size;	//ray step size
+/// Uniforms
+///
+//////////////////////////////////////////////////////////////////////////////
 
-//constants
+/// Volume dataset
+uniform sampler3D	volume;
+
+/// Transfer function
+uniform sampler1D transfer_func;
+
+/// Camera position
+uniform vec3		camPos;
+
+/// Ray step size
+uniform vec3		step_size;
+
+/// Constants
+///
+//////////////////////////////////////////////////////////////////////////////
+
 const int MAX_SAMPLES = 300;	//total samples for each ray march step
 const vec3 texMin = vec3(0);	//minimum texture access coordinate
 const vec3 texMax = vec3(1);	//maximum texture access coordinate
 
+/// Main
+///
+//////////////////////////////////////////////////////////////////////////////
 void main()
 {
   //get the 3D texture coordinates for lookup into the volume dataset
@@ -58,10 +75,10 @@ void main()
 
     // data fetching from the red channel of volume texture
     float scalar = texture(volume, dataPos).r;
-    vec4 src = vec4(scalar);
+    vec4 src = texture(transfer_func, scalar);
 
     // Reduce the alpha to have a more transparent result
-    src.a *= .05f;
+//    src.a *= .05f;
 
     //Opacity calculation using compositing:
     //here we use front to back compositing scheme whereby the current sample
@@ -80,6 +97,6 @@ void main()
     //if the currently composited colour alpha is already fully saturated
     //we terminated the loop
     if(dst.a > 0.99)
-      sbreak;
+      break;
   }
 }

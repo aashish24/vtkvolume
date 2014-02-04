@@ -13,6 +13,7 @@
 #include <vtkSmartPointer.h>
 #include <vtkPoints.h>
 #include <vtkFloatArray.h>
+#include <vtkVector.h>
 
 #include <GL/glew.h>
 #include <vtkgl.h>
@@ -22,32 +23,215 @@
 vtkStandardNewMacro(vtkSinglePassSimpleVolumeMapper);
 
 // Remove this afterwards
-#define GL_CHECK_ERRORS assert(glGetError()== GL_NO_ERROR);
+#define GL_CHECK_ERRORS \
+  {\
+  std::cerr << "Checking for error " << glGetError() << std::endl; \
+  assert(glGetError()== GL_NO_ERROR); \
+  }
+
+class vtkVector4d : public vtkVector<double, 4>
+{
+public:
+  vtkVector4d() {}
+  vtkVector4d(double x, double y, double z, double w) : vtkVector<double, 4>()
+    {
+    this->Data[0] = x;
+    this->Data[1] = y;
+    this->Data[2] = z;
+    this->Data[3] = w;
+    }
+  explicit vtkVector4d(double scalar) : vtkVector<double, 4>(scalar)
+    {
+    this->Data[0] = scalar;
+    this->Data[1] = scalar;
+    this->Data[2] = scalar;
+    this->Data[3] = scalar;
+    }
+  explicit vtkVector4d(const double *init) : vtkVector<double, 4>(init) {}
+  vtkVectorDerivedMacro(vtkVector4d, double, 4)
+//  vtkVector4Cross(vtkVector4d, double)
+};
+
+vtkVector4d operator*(const vtkVector4d& vec4d, float scalar)
+{
+    vtkVector4d out;
+    out[0] = vec4d[0] * scalar;
+    out[1] = vec4d[1] * scalar;
+    out[2] = vec4d[2] * scalar;
+    out[3] = vec4d[3] * scalar;
+
+    return out;
+}
+
+vtkVector4d operator*(int scalar, const vtkVector4d& vec4d)
+{
+    vtkVector4d out;
+    out[0] = vec4d[0] * scalar;
+    out[1] = vec4d[1] * scalar;
+    out[2] = vec4d[2] * scalar;
+    out[3] = vec4d[3] * scalar;
+
+    return out;
+}
+
+vtkVector4d operator*(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
+{
+    vtkVector4d out;
+    out[0] = vec4d1[0] * vec4d2[0];
+    out[1] = vec4d1[1] * vec4d2[1];
+    out[2] = vec4d1[2] * vec4d2[2];
+    out[3] = vec4d1[3] * vec4d2[3];
+
+    return out;
+}
+
+vtkVector4d operator/(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
+{
+    vtkVector4d out;
+    out[0] = vec4d1[0] / vec4d2[0];
+    out[1] = vec4d1[1] / vec4d2[1];
+    out[2] = vec4d1[2] / vec4d2[2];
+    out[3] = vec4d1[3] / vec4d2[3];
+
+    return out;
+}
+
+vtkVector4d operator+(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
+{
+    vtkVector4d out;
+    out[0] = vec4d1[0] + vec4d2[0];
+    out[1] = vec4d1[1] + vec4d2[1];
+    out[2] = vec4d1[2] + vec4d2[2];
+    out[3] = vec4d1[3] + vec4d2[3];
+
+    return out;
+}
+
+vtkVector4d operator-(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
+{
+    vtkVector4d out;
+    out[0] = vec4d1[0] - vec4d2[0];
+    out[1] = vec4d1[1] - vec4d2[1];
+    out[2] = vec4d1[2] - vec4d2[2];
+    out[3] = vec4d1[3] - vec4d2[3];
+
+    return out;
+}
 
 // Class that implements control point for the transfer function
 class TransferControlPoint
 {
 public:
-    float Color[4];
+    vtkVector4d Color;
     int IsoValue;
 
-    void TransferControlPoint(float r, float g, float b, int isovalue)
+    TransferControlPoint(double r, double g, double b, int isovalue)
     {
-      Color.X = r;
-      Color.Y = g;
-      Color.Z = b;
-      Color.W = 1.0f;
+      Color[0] = r;
+      Color[1] = g;
+      Color[2] = b;
+      Color[3] = 1.0f;
       IsoValue = isovalue;
     }
 
-    void TransferControlPoint(float alpha, int isovalue)
+    TransferControlPoint(double alpha, int isovalue)
     {
-      Color.X = 0.0f;
-      Color.Y = 0.0f;
-      Color.Z = 0.0f;
-      Color.W = alpha;
+      Color[0] = 0.0;
+      Color[1] = 0.0;
+      Color[2] = 0.0;
+      Color[3] = alpha;
       IsoValue = isovalue;
     }
+};
+
+/// Cubic class that calculates the cubic spline from a set of control points/knots
+/// and performs cubic interpolation.
+///
+/// Based on the natural cubic spline code from:
+/// http://www.cse.unsw.edu.au/~lambert/splines/natcubic.html
+class Cubic
+{
+private:
+  vtkVector4d a, b, c, d; // a + b*s + c*s^2 +d*s^3
+
+public:
+  Cubic()
+    {
+    }
+
+  Cubic(vtkVector4d a, vtkVector4d b, vtkVector4d c, vtkVector4d d)
+    {
+    this->a = a;
+    this->b = b;
+    this->c = c;
+    this->d = d;
+    }
+
+  // Evaluate the point using a cubic equation
+  vtkVector4d GetPointOnSpline(float s)
+    {
+    return (((d * s) + c) * s + b) * s + a;
+    }
+
+  static std::vector<Cubic> CalculateCubicSpline(int n, std::vector<TransferControlPoint> v)
+    {
+    std::vector<vtkVector4d> gamma;
+    std::vector<vtkVector4d> delta;
+    std::vector<vtkVector4d> D;
+
+    gamma.resize(n + 1);
+    delta.resize(n + 1);
+    D.resize(n + 1);
+
+    int i;
+    /* We need to solve the equation
+     * taken from: http://mathworld.wolfram.com/CubicSpline.html
+       [2 1       ] [D[0]]   [3(v[1] - v[0])  ]
+       |1 4 1     | |D[1]|   |3(v[2] - v[0])  |
+       |  1 4 1   | | .  | = |      .         |
+       |    ..... | | .  |   |      .         |
+       |     1 4 1| | .  |   |3(v[n] - v[n-2])|
+       [       1 2] [D[n]]   [3(v[n] - v[n-1])]
+
+       by converting the matrix to upper triangular.
+       The D[i] are the derivatives at the control points.
+     */
+
+    // This builds the coefficients of the left matrix
+    gamma[0][0] = 1.0f / 2.0f;
+    gamma[0][1] = 1.0f / 2.0f;
+    gamma[0][2] = 1.0f / 2.0f;
+    gamma[0][3] = 1.0f / 2.0f;
+
+    for (i = 1; i < n; i++)
+      {
+      gamma[i] = vtkVector4d(1) / ((4 * vtkVector4d(1)) - gamma[i - 1]);
+      }
+    gamma[n] = vtkVector4d(1) / ((2 * vtkVector4d(1)) - gamma[n - 1]);
+
+    delta[0] = 3 * (v[1].Color - v[0].Color) * gamma[0];
+    for (i = 1; i < n; i++)
+      {
+      delta[i] = (3 * (v[i + 1].Color - v[i - 1].Color) - delta[i - 1]) * gamma[i];
+      }
+    delta[n] = (3 * (v[n].Color - v[n - 1].Color) - delta[n - 1]) * gamma[n];
+
+    D[n] = delta[n];
+    for (i = n - 1; i >= 0; i--)
+      {
+      D[i] = delta[i] - gamma[i] * D[i + 1];
+      }
+
+    // Now compute the coefficients of the cubics
+    std::vector<Cubic> C;
+    C.resize(n);
+    for (i = 0; i < n; i++)
+      {
+      C[i] = Cubic(v[i].Color, D[i], 3 * (v[i + 1].Color - v[i].Color) - 2 * D[i] - D[i + 1],
+             2 * (v[i].Color - v[i + 1].Color) + D[i] + D[i + 1]);
+      }
+    return C;
+  }
 };
 
 // Class that hides implementation details
@@ -56,30 +240,57 @@ class vtkSinglePassSimpleVolumeMapper::vtkInternal
 public:
   vtkInternal(vtkSinglePassSimpleVolumeMapper* parent) :
     Parent(parent),
-    VolmeLoaded(false), Initialized(false)
+    VolmeLoaded(false), Initialized(false), ValidTransferFunction(false)
     {
+    this->ColorKnots = std::vector<TransferControlPoint>();
+    this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 0));
+    this->ColorKnots.push_back(TransferControlPoint(1.0, 1.0, 1.0, 50));
+    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.8, 0.8, 200));
+    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.5, 0.5, 256));
+    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.2, 0.2, 512));
+
+    this->AlphaKnots = std::vector<TransferControlPoint>();
+    this->AlphaKnots.push_back(TransferControlPoint(0.0f, 0));
+    this->AlphaKnots.push_back(TransferControlPoint(0.0f, 50));
+    this->AlphaKnots.push_back(TransferControlPoint(0.02f, 80));
+    this->AlphaKnots.push_back(TransferControlPoint(0.03f, 500));
+    this->AlphaKnots.push_back(TransferControlPoint(0.04f, 512));
     }
 
   ~vtkInternal()
     {
     }
 
+  unsigned int GetVolumeTexture()
+    {
+    return this->VolumeTexture;
+    }
+
+  unsigned int GetTransferFunctionSampler()
+    {
+    return this->TransferFuncSampler;
+    }
+
   bool LoadVolume(vtkImageData* imageData);
   bool IsVolmeLoaded();
   bool IsInitialized();
+  bool HasValidTransferFunction();
   void ComputeTransferFunction();
 
   vtkSinglePassSimpleVolumeMapper* Parent;
 
   bool VolmeLoaded;
   bool Initialized;
+  bool ValidTransferFunction;
 
   GLuint cubeVBOID;
   GLuint cubeVAOID;
   GLuint cubeIndicesID;
+
   GLSLShader shader;
 
-  GLuint TransferFunc;
+  GLuint VolumeTexture;
+  GLuint TransferFuncSampler;
 
   int CellFlag;
   int TextureSize[3];
@@ -92,25 +303,32 @@ public:
 // Helper method for computing the transfer function
 void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
 {
+  const int width = 512;
   // Initialize the cubic spline for the transfer function
-  float transferFunc[256*4];
+  float transferFunc[width*4];
+
+  // Initialize to 0
+  for (int i = 0; i < width * 4; i++)
+    {
+    transferFunc[i] = 0.0;
+    }
 
   // Fit a cubic spline for the transfer function
-  std::vector<Cubic> colorCubic = this->CalculateCubicSpline(ColorKnots.size() - 1, ColorKnots);
-  std::vector<Cubic> alphaCubic = this->CalculateCubicSpline(AlphaKnots.size() - 1, AlphaKnots);
+  std::vector<Cubic> colorCubic = Cubic::CalculateCubicSpline(ColorKnots.size() - 1, ColorKnots);
+  std::vector<Cubic> alphaCubic = Cubic::CalculateCubicSpline(AlphaKnots.size() - 1, AlphaKnots);
 
   int numTF = 0;
   for (int i = 0; i < ColorKnots.size() - 1; i++)
     {
     // Compute steps
-    int steps = mColorKnots[i + 1].IsoValue - mColorKnots[i].IsoValue;
+    int steps = ColorKnots[i + 1].IsoValue - ColorKnots[i].IsoValue;
 
     // Now compute the color
     for (int j = 0; j < steps; j++)
       {
       float k = (float)j / (float)(steps - 1);
 
-      std::vector<float> color = colorCubic[i].GetPointOnSpline(k);
+      vtkVector4d color = colorCubic[i].GetPointOnSpline(k);
       for (int k = 0; k < 4; ++k)
         {
         transferFunc[numTF++] = color[k];
@@ -119,63 +337,69 @@ void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
     }
 
   numTF = 0;
-  for (int i = 0; i < AlphaKnots.Count - 1; i++)
+  for (int i = 0; i < AlphaKnots.size() - 1; i++)
     {
     int steps = AlphaKnots[i + 1].IsoValue - AlphaKnots[i].IsoValue;
     for (int j = 0; j < steps; j++)
       {
       float k = (float)j / (float)(steps - 1);
 
-      std::vector<float> color = colorCubic[i].GetPointOnSpline(k);
-      transferFunc[numTF + (j+1) * 3 + 1] = color[3];
+      vtkVector4d color = alphaCubic[i].GetPointOnSpline(k);
+      transferFunc[4 * (++numTF) - 1] = color[3];
+      std::cerr << color[3] << std::endl;
+      }
     }
 
   // Generate OpenGL texture
-  glGenTextures(1, &this->TransferFunc);
-  glBindTexture(GL_TEXTURE_1D, this->TransferFunc);
+  glEnable(GL_TEXTURE_1D);
+  glGenTextures(1, &this->TransferFuncSampler);
+  glBindTexture(GL_TEXTURE_1D, this->TransferFuncSampler);
 
   // Set the texture parameters
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_R, GL_CLAMP);
 
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
+  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, width, 0, GL_RGBA, GL_FLOAT, transferFunc);
+
+  this->ValidTransferFunction = true;
 }
 
 
 bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
 {
-  //volume texture ID
-  GLuint textureID;
+  // Generate OpenGL texture
+  glEnable(GL_TEXTURE_3D);
+  glGenTextures(1, &this->VolumeTexture);
+  glBindTexture(GL_TEXTURE_3D, this->VolumeTexture);
 
-  // generate OpenGL texture
-  glGenTextures(1, &textureID);
-  glBindTexture(GL_TEXTURE_3D, textureID);
-
-  // set the texture parameters
+  // Set the texture parameters
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
-  //set the mipmap levels (base and max)
+  // Set the mipmap levels (base and max)
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 4);
 
   GL_CHECK_ERRORS
 
-  //allocate data with internal format and foramt as (GL_RED)
+  // Allocate data with internal format and foramt as (GL_RED)
   GLint internalFormat=0;
   GLenum format=0;
   GLenum type=0;
 
-  // @aashish: tableRange is for transform function
-  double tableRange[2];
-
   double shift=0.0;
   double scale=1.0;
   int needTypeConversion=0;
+
+ // @aashish: tableRange is for transform function in existing VTK code.
+ double tableRange[2];
 
   vtkDataArray* scalars = this->Parent->GetScalars(imageData,
                           this->Parent->ScalarMode,
@@ -329,9 +553,9 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
             << TextureSize[1] << " "
             << TextureSize[2] << std::endl;
 
-  glTexImage3D(GL_TEXTURE_3D,0,internalFormat,
-               this->TextureSize[0],this->TextureSize[1],this->TextureSize[2],0,
-               format,type, dataPtr);
+  glTexImage3D(GL_TEXTURE_3D, 0, internalFormat,
+               this->TextureSize[0],this->TextureSize[1],this->TextureSize[2], 0,
+               format, type, dataPtr);
 
   GL_CHECK_ERRORS
 
@@ -408,6 +632,7 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   if (!this->Implementation->IsVolmeLoaded())
     {
     this->Implementation->LoadVolume(input);
+    this->Implementation->ComputeTransferFunction();
     }
 
   if (!this->Implementation->IsInitialized())
@@ -416,16 +641,16 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     this->Implementation->shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
     this->Implementation->shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
 
-    //compile and link the shader
+    // Compile and link the shader
     this->Implementation->shader.CreateAndLinkProgram();
     this->Implementation->shader.Use();
-
         //add attributes and uniforms
         this->Implementation->shader.AddAttribute("vVertex");
         this->Implementation->shader.AddUniform("MVP");
         this->Implementation->shader.AddUniform("volume");
         this->Implementation->shader.AddUniform("camPos");
         this->Implementation->shader.AddUniform("step_size");
+        this->Implementation->shader.AddUniform("transfer_func");
 
         //pass constant uniforms at initialization
         glUniform3f(this->Implementation->shader("step_size"),
@@ -433,6 +658,16 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
                     1.0f/(this->Implementation->TextureSize[1] * 10),
                     1.0f/(this->Implementation->TextureSize[2] * 10));
         glUniform1i(this->Implementation->shader("volume"),0);
+        glUniform1i(this->Implementation->shader("transfer_func"), 1);
+
+        // Bind textures
+        glEnable(GL_TEXTURE_3D);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_3D, this->Implementation->GetVolumeTexture());
+
+        glEnable(GL_TEXTURE_1D);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_1D, this->Implementation->GetTransferFunctionSampler());
     this->Implementation->shader.UnUse();
 
     GL_CHECK_ERRORS

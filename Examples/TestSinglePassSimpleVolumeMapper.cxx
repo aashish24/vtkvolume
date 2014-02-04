@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
   // intentional odd and NPOT  width/height
   renWin->AddRenderer(ren1);
   ren1->Delete();
-  renWin->SetSize(300, 300);
+  renWin->SetSize(800, 800);
 
   vtkRenderWindowInteractor *iren=vtkRenderWindowInteractor::New();
   iren->SetRenderWindow(renWin);
