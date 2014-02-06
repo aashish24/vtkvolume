@@ -252,9 +252,9 @@ public:
     this->AlphaKnots = std::vector<TransferControlPoint>();
     this->AlphaKnots.push_back(TransferControlPoint(0.0f, 0));
     this->AlphaKnots.push_back(TransferControlPoint(0.0f, 50));
-    this->AlphaKnots.push_back(TransferControlPoint(0.02f, 80));
-    this->AlphaKnots.push_back(TransferControlPoint(0.03f, 500));
-    this->AlphaKnots.push_back(TransferControlPoint(0.04f, 512));
+    this->AlphaKnots.push_back(TransferControlPoint(0.0051f, 80));
+    this->AlphaKnots.push_back(TransferControlPoint(0.01f, 500));
+    this->AlphaKnots.push_back(TransferControlPoint(0.02f, 512));
     }
 
   ~vtkInternal()
