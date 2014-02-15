@@ -18,6 +18,10 @@ public:
     void UnUse();
     void AddAttribute(const string& attribute);
     void AddUniform(const string& uniform);
+    unsigned int GetProgram()
+      {
+      return this->_program;
+      }
 
     //An indexer that returns the location of the attribute/uniform
     GLuint operator[](const string& attribute);

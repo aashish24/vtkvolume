@@ -252,9 +252,9 @@ public:
     this->AlphaKnots = std::vector<TransferControlPoint>();
     this->AlphaKnots.push_back(TransferControlPoint(0.0f, 0));
     this->AlphaKnots.push_back(TransferControlPoint(0.0f, 50));
-    this->AlphaKnots.push_back(TransferControlPoint(0.0051f, 80));
-    this->AlphaKnots.push_back(TransferControlPoint(0.01f, 500));
-    this->AlphaKnots.push_back(TransferControlPoint(0.02f, 512));
+    this->AlphaKnots.push_back(TransferControlPoint(0.01f, 80));
+    this->AlphaKnots.push_back(TransferControlPoint(0.05f, 500));
+    this->AlphaKnots.push_back(TransferControlPoint(0.10f, 512));
     }
 
   ~vtkInternal()
@@ -285,7 +285,8 @@ public:
 
   GLuint cubeVBOID;
   GLuint cubeVAOID;
-  GLuint cubeIndicesID;
+  GLuint CubeIndicesID;
+  GLuint CubeTextureID;
 
   GLSLShader shader;
 
@@ -346,7 +347,6 @@ void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
 
       vtkVector4d color = alphaCubic[i].GetPointOnSpline(k);
       transferFunc[4 * (++numTF) - 1] = color[3];
-      std::cerr << color[3] << std::endl;
       }
     }
 
@@ -360,8 +360,8 @@ void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_R, GL_CLAMP);
 
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, width, 0, GL_RGBA, GL_FLOAT, transferFunc);
 
@@ -380,12 +380,12 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
   // Set the mipmap levels (base and max)
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 4);
+//  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
+//  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 4);
 
   GL_CHECK_ERRORS
 
@@ -560,7 +560,7 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
   GL_CHECK_ERRORS
 
   // Generate mipmaps
-  glGenerateMipmap(GL_TEXTURE_3D);
+  //glGenerateMipmap(GL_TEXTURE_3D);
 
   this->VolmeLoaded = true;
   return this->VolmeLoaded;
@@ -644,8 +644,12 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     // Compile and link the shader
     this->Implementation->shader.CreateAndLinkProgram();
     this->Implementation->shader.Use();
-        //add attributes and uniforms
+        // Add attributes and uniforms
         this->Implementation->shader.AddAttribute("vVertex");
+        this->Implementation->shader.AddAttribute("vUV");
+
+        std::cerr << "program location: " << this->Implementation->shader["vUV"] << std::endl;
+
         this->Implementation->shader.AddUniform("MVP");
         this->Implementation->shader.AddUniform("volume");
         this->Implementation->shader.AddUniform("camPos");
@@ -672,50 +676,133 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
     GL_CHECK_ERRORS
 
+    double bounds[6];
+    vol->GetBounds(bounds);
+
     // Setup unit cube vertex array and vertex buffer objects
     glGenVertexArrays(1, &this->Implementation->cubeVAOID);
     glGenBuffers(1, &this->Implementation->cubeVBOID);
-    glGenBuffers(1, &this->Implementation->cubeIndicesID);
+    glGenBuffers(1, &this->Implementation->CubeIndicesID);
+    glGenBuffers(1, &this->Implementation->CubeTextureID);
 
-    // Unit cube vertices (hard coded now)
-    float vertices[8][3] = {{-0.5f,-0.5f,-0.5f},
-                            { 0.5f,-0.5f,-0.5f},
-                            { 0.5f, 0.5f,-0.5f},
-                            {-0.5f, 0.5f,-0.5f},
-                            {-0.5f,-0.5f, 0.5f},
-                            { 0.5f,-0.5f, 0.5f},
-                            { 0.5f, 0.5f, 0.5f},
-                            {-0.5f, 0.5f, 0.5f}};
+//    // Cube vertices
+//    float vertices[8][3] =
+//      {
+//      {bounds[0], bounds[2], bounds[4]}, // 0
+//      {bounds[1], bounds[2], bounds[4]}, // 1
+//      {bounds[1], bounds[3], bounds[4]}, // 2
+//      {bounds[0], bounds[3], bounds[4]}, // 3
+//      {bounds[0], bounds[2], bounds[5]}, // 4
+//      {bounds[1], bounds[2], bounds[5]}, // 5
+//      {bounds[1], bounds[3], bounds[5]}, // 6
+//      {bounds[0], bounds[3], bounds[5]}  // 7
+//      };
 
-    // Unit cube indices
-    GLushort cubeIndices[36]={0,5,4,
-                              5,0,1,
-                              3,7,6,
-                              3,6,2,
-                              7,4,6,
-                              6,4,5,
-                              2,1,3,
-                              3,1,0,
-                              3,0,7,
-                              7,0,4,
-                              6,5,2,
-                              2,5,1};
+//    // Cube indices
+//    GLushort cubeIndices[36]=
+//      {
+//      0,5,4, // bottom
+//      5,0,1, // bottom
+//      3,7,6, // top
+//      3,6,2, // op
+//      7,4,6, // front
+//      6,4,5, // front
+//      2,1,3, // left side
+//      3,1,0, // left side
+//      3,0,7, // right side
+//      7,0,4, // right side
+//      6,5,2, // back
+//      2,5,1  // back
+//      };
+
+    float vertices[24][3] =
+      {
+      // Front
+      {bounds[0], bounds[2], bounds[5]},
+      {bounds[1], bounds[2], bounds[5]},
+      {bounds[1], bounds[3], bounds[5]},
+      {bounds[0], bounds[3], bounds[5]},
+      // Right
+      {bounds[1], bounds[2], bounds[5]},
+      {bounds[1], bounds[2], bounds[4]},
+      {bounds[1], bounds[3], bounds[4]},
+      {bounds[1], bounds[3], bounds[5]},
+      // Back
+      {bounds[1], bounds[2], bounds[4]},
+      {bounds[0], bounds[2], bounds[4]},
+      {bounds[0], bounds[3], bounds[4]},
+      {bounds[1], bounds[3], bounds[4]},
+      // Left
+      {bounds[0], bounds[2], bounds[4]},
+      {bounds[0], bounds[2], bounds[5]},
+      {bounds[0], bounds[3], bounds[5]},
+      {bounds[0], bounds[3], bounds[4]},
+      // Bottom
+      {bounds[0], bounds[2], bounds[4]},
+      {bounds[1], bounds[2], bounds[4]},
+      {bounds[1], bounds[2], bounds[5]},
+      {bounds[0], bounds[2], bounds[5]},
+      // Top
+      {bounds[0], bounds[3], bounds[5]},
+      {bounds[1], bounds[3], bounds[5]},
+      {bounds[1], bounds[3], bounds[4]},
+      {bounds[0], bounds[3], bounds[4]}
+    };
+
+    // Cube indices
+    GLushort cubeIndices[36]=
+      {
+      0, 1, 2,
+      0, 2, 3,
+      4, 5, 6,
+      4, 6, 7,
+      8, 9, 10,
+      8, 10, 11,
+      12, 13, 14,
+      12, 14, 15,
+      16, 17, 18,
+      16, 18, 19,
+      20, 21, 22,
+      20, 22, 23
+      };
+
+    GLfloat cubeTextureCoords[2*4*6] =
+      {
+       // Front
+       0.0, 0.0,
+       1.0, 0.0,
+       1.0, 1.0,
+       0.0, 1.0,
+     };
+     for (int i = 1; i < 6; i++)
+      {
+      memcpy(&cubeTextureCoords[i*4*2], &cubeTextureCoords[0], 2*4*sizeof(GLfloat));
+      }
 
     glBindVertexArray(this->Implementation->cubeVAOID);
-    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->cubeVBOID);
 
     // pass cube vertices to buffer object memory
+    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->cubeVBOID);
     glBufferData (GL_ARRAY_BUFFER, sizeof(vertices), &(vertices[0][0]), GL_STATIC_DRAW);
 
     GL_CHECK_ERRORS
 
-    //enable vertex attributre array for position
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,0,0);
+    // Enable vertex attributre array for position
+    // and pass indices to element array  buffer
+    glEnableVertexAttribArray(this->Implementation->shader["tVertex"]);
+    glVertexAttribPointer(this->Implementation->shader["tVertex"], 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    //pass indices to element array  buffer
-    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->cubeIndicesID);
+    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->CubeTextureID);
+    glBufferData (GL_ARRAY_BUFFER, sizeof(cubeTextureCoords), &cubeTextureCoords[0], GL_STATIC_DRAW);
+
+    // Pass texture coodinates
+    glEnableVertexAttribArray(this->Implementation->shader["vUV"]);
+    glVertexAttribPointer(this->Implementation->shader["vUV"], 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesID);
     glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
+
+    GL_CHECK_ERRORS
 
     glBindVertexArray(0);
 
@@ -731,7 +818,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
   // Enable blending
   glEnable(GL_BLEND);
-  glBindVertexArray(this->Implementation->cubeVAOID);
 
   // Use the shader
   this->Implementation->shader.Use();
@@ -762,6 +848,9 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
   glUniformMatrix4fv(this->Implementation->shader("MVP"), 1, GL_FALSE, &(mvp[0]));
   glUniform3fv(this->Implementation->shader("camPos"), 1, &(pos[0]));
+
+  glBindVertexArray(this->Implementation->cubeVAOID);
+
   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);
 
   this->Implementation->shader.UnUse();
