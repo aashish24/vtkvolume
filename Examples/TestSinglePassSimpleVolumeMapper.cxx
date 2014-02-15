@@ -44,8 +44,8 @@ int main(int argc, char *argv[])
   cout << "CTEST_FULL_OUTPUT (Avoid ctest truncation of output)" << endl;
 
   vtkRTAnalyticSource* source=vtkRTAnalyticSource::New();
-  source->SetCenter(0.0, 0.0, 0.0);
-  source->SetWholeExtent(-2, 2, -2, 2, -2, 2);
+//  source->SetCenter(0.0, 0.0, 0.0);
+//  source->SetWholeExtent(-2, 2, -2, 2, -2, 2);
   source->Update();
 
   vtkRenderWindow* renWin=vtkRenderWindow::New();

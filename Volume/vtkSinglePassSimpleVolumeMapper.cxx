@@ -243,18 +243,14 @@ public:
     VolmeLoaded(false), Initialized(false), ValidTransferFunction(false)
     {
     this->ColorKnots = std::vector<TransferControlPoint>();
-    this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 0));
-    this->ColorKnots.push_back(TransferControlPoint(1.0, 1.0, 1.0, 50));
-    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.8, 0.8, 200));
-    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.5, 0.5, 256));
-    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.2, 0.2, 512));
+    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.0, 0.0, 0));
+    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.0, 0.0, 256));
+    this->ColorKnots.push_back(TransferControlPoint(0.0, 1.0, 0.0, 512));
 
     this->AlphaKnots = std::vector<TransferControlPoint>();
-    this->AlphaKnots.push_back(TransferControlPoint(0.0f, 0));
-    this->AlphaKnots.push_back(TransferControlPoint(0.0f, 50));
-    this->AlphaKnots.push_back(TransferControlPoint(0.01f, 80));
-    this->AlphaKnots.push_back(TransferControlPoint(0.05f, 500));
-    this->AlphaKnots.push_back(TransferControlPoint(0.10f, 512));
+    this->AlphaKnots.push_back(TransferControlPoint(0.2f, 0));
+    this->AlphaKnots.push_back(TransferControlPoint(0.2f, 256));
+    this->AlphaKnots.push_back(TransferControlPoint(0.02f, 512));
     }
 
   ~vtkInternal()
