@@ -635,6 +635,9 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     this->Implementation->ComputeTransferFunction();
     }
 
+  double bounds[6];
+  vol->GetBounds(bounds);
+
   if (!this->Implementation->IsInitialized())
     {
     // Load the raycasting shader
@@ -655,6 +658,8 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
         this->Implementation->shader.AddUniform("camPos");
         this->Implementation->shader.AddUniform("step_size");
         this->Implementation->shader.AddUniform("transfer_func");
+        this->Implementation->shader.AddUniform("vol_extents_min");
+        this->Implementation->shader.AddUniform("vol_extents_max");
 
         //pass constant uniforms at initialization
         glUniform3f(this->Implementation->shader("step_size"),
@@ -676,9 +681,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
     GL_CHECK_ERRORS
 
-    double bounds[6];
-    vol->GetBounds(bounds);
-
     // Setup unit cube vertex array and vertex buffer objects
     glGenVertexArrays(1, &this->Implementation->cubeVAOID);
     glGenBuffers(1, &this->Implementation->cubeVBOID);
@@ -686,87 +688,87 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     glGenBuffers(1, &this->Implementation->CubeTextureID);
 
 //    // Cube vertices
-//    float vertices[8][3] =
-//      {
-//      {bounds[0], bounds[2], bounds[4]}, // 0
-//      {bounds[1], bounds[2], bounds[4]}, // 1
-//      {bounds[1], bounds[3], bounds[4]}, // 2
-//      {bounds[0], bounds[3], bounds[4]}, // 3
-//      {bounds[0], bounds[2], bounds[5]}, // 4
-//      {bounds[1], bounds[2], bounds[5]}, // 5
-//      {bounds[1], bounds[3], bounds[5]}, // 6
-//      {bounds[0], bounds[3], bounds[5]}  // 7
-//      };
-
-//    // Cube indices
-//    GLushort cubeIndices[36]=
-//      {
-//      0,5,4, // bottom
-//      5,0,1, // bottom
-//      3,7,6, // top
-//      3,6,2, // op
-//      7,4,6, // front
-//      6,4,5, // front
-//      2,1,3, // left side
-//      3,1,0, // left side
-//      3,0,7, // right side
-//      7,0,4, // right side
-//      6,5,2, // back
-//      2,5,1  // back
-//      };
-
-    float vertices[24][3] =
+    float vertices[8][3] =
       {
-      // Front
-      {bounds[0], bounds[2], bounds[5]},
-      {bounds[1], bounds[2], bounds[5]},
-      {bounds[1], bounds[3], bounds[5]},
-      {bounds[0], bounds[3], bounds[5]},
-      // Right
-      {bounds[1], bounds[2], bounds[5]},
-      {bounds[1], bounds[2], bounds[4]},
-      {bounds[1], bounds[3], bounds[4]},
-      {bounds[1], bounds[3], bounds[5]},
-      // Back
-      {bounds[1], bounds[2], bounds[4]},
-      {bounds[0], bounds[2], bounds[4]},
-      {bounds[0], bounds[3], bounds[4]},
-      {bounds[1], bounds[3], bounds[4]},
-      // Left
-      {bounds[0], bounds[2], bounds[4]},
-      {bounds[0], bounds[2], bounds[5]},
-      {bounds[0], bounds[3], bounds[5]},
-      {bounds[0], bounds[3], bounds[4]},
-      // Bottom
-      {bounds[0], bounds[2], bounds[4]},
-      {bounds[1], bounds[2], bounds[4]},
-      {bounds[1], bounds[2], bounds[5]},
-      {bounds[0], bounds[2], bounds[5]},
-      // Top
-      {bounds[0], bounds[3], bounds[5]},
-      {bounds[1], bounds[3], bounds[5]},
-      {bounds[1], bounds[3], bounds[4]},
-      {bounds[0], bounds[3], bounds[4]}
-    };
+      {bounds[0], bounds[2], bounds[4]}, // 0
+      {bounds[1], bounds[2], bounds[4]}, // 1
+      {bounds[1], bounds[3], bounds[4]}, // 2
+      {bounds[0], bounds[3], bounds[4]}, // 3
+      {bounds[0], bounds[2], bounds[5]}, // 4
+      {bounds[1], bounds[2], bounds[5]}, // 5
+      {bounds[1], bounds[3], bounds[5]}, // 6
+      {bounds[0], bounds[3], bounds[5]}  // 7
+      };
 
     // Cube indices
     GLushort cubeIndices[36]=
       {
-      0, 1, 2,
-      0, 2, 3,
-      4, 5, 6,
-      4, 6, 7,
-      8, 9, 10,
-      8, 10, 11,
-      12, 13, 14,
-      12, 14, 15,
-      16, 17, 18,
-      16, 18, 19,
-      20, 21, 22,
-      20, 22, 23
+      0,5,4, // bottom
+      5,0,1, // bottom
+      3,7,6, // top
+      3,6,2, // op
+      7,4,6, // front
+      6,4,5, // front
+      2,1,3, // left side
+      3,1,0, // left side
+      3,0,7, // right side
+      7,0,4, // right side
+      6,5,2, // back
+      2,5,1  // back
       };
 
-    GLfloat cubeTextureCoords[2*4*6] =
+//    float vertices[24][3] =
+//      {
+//      // Front
+//      {bounds[0], bounds[2], bounds[5]},
+//      {bounds[1], bounds[2], bounds[5]},
+//      {bounds[1], bounds[3], bounds[5]},
+//      {bounds[0], bounds[3], bounds[5]},
+//      // Right
+//      {bounds[1], bounds[2], bounds[5]},
+//      {bounds[1], bounds[2], bounds[4]},
+//      {bounds[1], bounds[3], bounds[4]},
+//      {bounds[1], bounds[3], bounds[5]},
+//      // Back
+//      {bounds[1], bounds[2], bounds[4]},
+//      {bounds[0], bounds[2], bounds[4]},
+//      {bounds[0], bounds[3], bounds[4]},
+//      {bounds[1], bounds[3], bounds[4]},
+//      // Left
+//      {bounds[0], bounds[2], bounds[4]},
+//      {bounds[0], bounds[2], bounds[5]},
+//      {bounds[0], bounds[3], bounds[5]},
+//      {bounds[0], bounds[3], bounds[4]},
+//      // Bottom
+//      {bounds[0], bounds[2], bounds[4]},
+//      {bounds[1], bounds[2], bounds[4]},
+//      {bounds[1], bounds[2], bounds[5]},
+//      {bounds[0], bounds[2], bounds[5]},
+//      // Top
+//      {bounds[0], bounds[3], bounds[5]},
+//      {bounds[1], bounds[3], bounds[5]},
+//      {bounds[1], bounds[3], bounds[4]},
+//      {bounds[0], bounds[3], bounds[4]}
+//    };
+
+//    // Cube indices
+//    GLushort cubeIndices[36]=
+//      {
+//      0, 1, 2,
+//      0, 2, 3,
+//      4, 5, 6,
+//      4, 6, 7,
+//      8, 9, 10,
+//      8, 10, 11,
+//      12, 13, 14,
+//      12, 14, 15,
+//      16, 17, 18,
+//      16, 18, 19,
+//      20, 21, 22,
+//      20, 22, 23
+//      };
+
+    GLfloat cubeTextureCoords[3*4*6] =
       {
        // Front
        0.0, 0.0,
@@ -848,6 +850,12 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
   glUniformMatrix4fv(this->Implementation->shader("MVP"), 1, GL_FALSE, &(mvp[0]));
   glUniform3fv(this->Implementation->shader("camPos"), 1, &(pos[0]));
+
+  float volExtentsMin[3] = {bounds[0], bounds[2], bounds[4]};
+  float volExtentsMax[3] = {bounds[1], bounds[3], bounds[5]};
+
+  glUniform3fv(this->Implementation->shader("vol_extents_min"), 1, &(volExtentsMin[0]));
+  glUniform3fv(this->Implementation->shader("vol_extents_max"), 1, &(volExtentsMax[0]));
 
   glBindVertexArray(this->Implementation->cubeVAOID);
 
