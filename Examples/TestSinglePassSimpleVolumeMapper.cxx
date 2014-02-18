@@ -18,79 +18,95 @@
 
 #include "../Volume/vtkSinglePassSimpleVolumeMapper.h"
 
-#include "vtkSphere.h"
-#include "vtkSampleFunction.h"
+#include <vtkSphere.h>
+#include <vtkSampleFunction.h>
 
-#include "vtkTestUtilities.h"
-#include "vtkColorTransferFunction.h"
-#include "vtkPiecewiseFunction.h"
-#include "vtkRenderer.h"
-#include "vtkRenderWindow.h"
-#include "vtkRenderWindowInteractor.h"
-#include "vtkVolumeProperty.h"
-#include "vtkCamera.h"
-#include "vtkRegressionTestImage.h"
-#include "vtkImageShiftScale.h"
-#include "vtkImageData.h"
-#include "vtkPointData.h"
-#include "vtkDataArray.h"
-#include "vtkRTAnalyticSource.h"
-#include "vtkNew.h"
-#include "vtkSphereSource.h"
-#include "vtkPolyDataMapper.h"
+#include <vtkTestUtilities.h>
+
+#include <vtkColorTransferFunction.h>
+#include <vtkPiecewiseFunction.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkVolumeProperty.h>
+#include <vtkCamera.h>
+#include <vtkRegressionTestImage.h>
+#include <vtkImageShiftScale.h>
+#include <vtkImageData.h>
+#include <vtkPointData.h>
+#include <vtkDataArray.h>
+#include <vtkRTAnalyticSource.h>
+#include <vtkNew.h>
+#include <vtkSphereSource.h>
+#include <vtkPolyDataMapper.h>
+
+#include <vtkSmartPointer.h>
+#include <vtksys/SystemTools.hxx>
+
+#include <vtkImageReader.h>
 
 int main(int argc, char *argv[])
 {
-  cout << "CTEST_FULL_OUTPUT (Avoid ctest truncation of output)" << endl;
+  vtkNew<vtkSinglePassSimpleVolumeMapper> volumeMapper;
+  volumeMapper->SetBlendModeToComposite();
 
-  vtkRTAnalyticSource* source=vtkRTAnalyticSource::New();
-//  source->SetCenter(0.0, 0.0, 0.0);
-//  source->SetWholeExtent(-2, 2, -2, 2, -2, 2);
-  source->Update();
+  if (argc > 1)
+    {
+    std::string filename = argv[1];
+    std::string ext = vtksys::SystemTools::GetFilenameLastExtension(filename);
+    std::string filePathWOExt = vtksys::SystemTools::GetFilenameWithoutLastExtension(filename);
+    if (ext == ".raw")
+      {
+      vtkNew<vtkImageReader> reader;
+      reader->SetFileName(filename.c_str());
+//      reader->SetDataByteOrderToBigEndian();
+      reader->SetDataScalarTypeToUnsignedChar();
+      reader->SetDataExtent(0, 255, 0, 255, 0, 255);
+      reader->SetFileDimensionality(3);
+//      reader->SetDataOrigin(0.0, 0.0, 0.0);
+//      reader->SetNumberOfScalarComponents(1);
+//      reader->SetFileLowerLeft(1);
+      reader->Update();
+      volumeMapper->SetInputConnection(reader->GetOutputPort());
+      }
+    }
+  else
+    {
+    vtkNew<vtkRTAnalyticSource> source;
+    source->Update();
+    volumeMapper->SetInputConnection(source->GetOutputPort());
+    }
 
-  vtkRenderWindow* renWin=vtkRenderWindow::New();
-  vtkRenderer *ren1 = vtkRenderer::New();
+  vtkNew<vtkRenderWindow> renWin;
+  vtkNew<vtkRenderer> ren1;
   ren1->SetBackground(0.2, 0.2, 0.5);
 
-  // intentional odd and NPOT  width/height
-  renWin->AddRenderer(ren1);
+  // Intentional odd and NPOT  width/height
+  renWin->AddRenderer(ren1.GetPointer());
   ren1->Delete();
   renWin->SetSize(800, 800);
 
-  vtkRenderWindowInteractor *iren=vtkRenderWindowInteractor::New();
-  iren->SetRenderWindow(renWin);
+  vtkNew<vtkRenderWindowInteractor> iren;
+  iren->SetRenderWindow(renWin.GetPointer());
   renWin->Delete();
 
-  // make sure we have an OpenGL context.
+  // Make sure we have an OpenGL context.
   renWin->Render();
 
-  vtkSinglePassSimpleVolumeMapper* volumeMapper;
-  vtkVolumeProperty* volumeProperty;
-  vtkVolume* volume;
-
-  volumeMapper = vtkSinglePassSimpleVolumeMapper::New();
-
-  // TODO Fix this
-  volumeMapper->SetBlendModeToComposite(); // composite first
-  volumeMapper->SetInputConnection(source->GetOutputPort());
-
-  volumeProperty=vtkVolumeProperty::New();
+  vtkNew<vtkVolumeProperty> volumeProperty;
   volumeProperty->ShadeOff();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
-  volume = vtkVolume::New();
-  volume->SetMapper(volumeMapper);
-  volume->SetProperty(volumeProperty);
-  ren1->AddViewProp(volume);
+  vtkNew<vtkVolume> volume;
+  volume->SetMapper(volumeMapper.GetPointer());
+  volume->SetProperty(volumeProperty.GetPointer());
 
+  ren1->AddViewProp(volume.GetPointer());
   ren1->ResetCamera();
+
   renWin->Render();
   ren1->ResetCamera();
-  iren->Start();
 
-  volumeMapper->Delete();
-  volumeProperty->Delete();
-  volume->Delete();
-  iren->Delete();
+  iren->Start();
 }
 

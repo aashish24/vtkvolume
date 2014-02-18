@@ -243,14 +243,17 @@ public:
     VolmeLoaded(false), Initialized(false), ValidTransferFunction(false)
     {
     this->ColorKnots = std::vector<TransferControlPoint>();
-    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.0, 0.0, 0));
-    this->ColorKnots.push_back(TransferControlPoint(1.0, 0.0, 0.0, 256));
+    this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 0));
+    this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 128));
+    this->ColorKnots.push_back(TransferControlPoint(0.2, 0.8, 0.2, 256));
     this->ColorKnots.push_back(TransferControlPoint(0.0, 1.0, 0.0, 512));
 
     this->AlphaKnots = std::vector<TransferControlPoint>();
-    this->AlphaKnots.push_back(TransferControlPoint(0.2f, 0));
-    this->AlphaKnots.push_back(TransferControlPoint(0.2f, 256));
-    this->AlphaKnots.push_back(TransferControlPoint(0.02f, 512));
+    this->AlphaKnots.push_back(TransferControlPoint(0.0f, 0));
+    this->AlphaKnots.push_back(TransferControlPoint(0.025f, 50));
+    this->AlphaKnots.push_back(TransferControlPoint(0.05f, 100));
+    this->AlphaKnots.push_back(TransferControlPoint(0.1f, 256));
+    this->AlphaKnots.push_back(TransferControlPoint(0.2f, 512));
     }
 
   ~vtkInternal()
@@ -634,6 +637,18 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   double bounds[6];
   vol->GetBounds(bounds);
 
+//  bounds[1] += 1;
+//  bounds[3] += 1;
+//  bounds[5] += 1;
+
+//  std::cerr << "bounds "
+//            << bounds[0] << " "
+//            << bounds[1] << " "
+//            << bounds[2] << " "
+//            << bounds[3] << " "
+//            << bounds[4] << " "
+//            << bounds[5] << " " << std::endl;
+
   if (!this->Implementation->IsInitialized())
     {
     // Load the raycasting shader
@@ -645,10 +660,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     this->Implementation->shader.Use();
         // Add attributes and uniforms
         this->Implementation->shader.AddAttribute("vVertex");
-        this->Implementation->shader.AddAttribute("vUV");
-
-        std::cerr << "program location: " << this->Implementation->shader["vUV"] << std::endl;
-
         this->Implementation->shader.AddUniform("MVP");
         this->Implementation->shader.AddUniform("volume");
         this->Implementation->shader.AddUniform("camPos");
@@ -659,10 +670,10 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
         //pass constant uniforms at initialization
         glUniform3f(this->Implementation->shader("step_size"),
-                    1.0f/(this->Implementation->TextureSize[0] * 10),
-                    1.0f/(this->Implementation->TextureSize[1] * 10),
-                    1.0f/(this->Implementation->TextureSize[2] * 10));
-        glUniform1i(this->Implementation->shader("volume"),0);
+                    1.0f/(this->Implementation->TextureSize[0]),
+                    1.0f/(this->Implementation->TextureSize[1]),
+                    1.0f/(this->Implementation->TextureSize[2]));
+        glUniform1i(this->Implementation->shader("volume"), 0);
         glUniform1i(this->Implementation->shader("transfer_func"), 1);
 
         // Bind textures
@@ -764,19 +775,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 //      20, 22, 23
 //      };
 
-    GLfloat cubeTextureCoords[3*4*6] =
-      {
-       // Front
-       0.0, 0.0,
-       1.0, 0.0,
-       1.0, 1.0,
-       0.0, 1.0,
-     };
-     for (int i = 1; i < 6; i++)
-      {
-      memcpy(&cubeTextureCoords[i*4*2], &cubeTextureCoords[0], 2*4*sizeof(GLfloat));
-      }
-
     glBindVertexArray(this->Implementation->cubeVAOID);
 
     // pass cube vertices to buffer object memory
@@ -789,13 +787,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     // and pass indices to element array  buffer
     glEnableVertexAttribArray(this->Implementation->shader["tVertex"]);
     glVertexAttribPointer(this->Implementation->shader["tVertex"], 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->CubeTextureID);
-    glBufferData (GL_ARRAY_BUFFER, sizeof(cubeTextureCoords), &cubeTextureCoords[0], GL_STATIC_DRAW);
-
-    // Pass texture coodinates
-    glEnableVertexAttribArray(this->Implementation->shader["vUV"]);
-    glVertexAttribPointer(this->Implementation->shader["vUV"], 2, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesID);
     glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
@@ -825,6 +816,8 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   // Pass shader uniforms
   double* tmpPos = ren->GetActiveCamera()->GetPosition();
   float pos[3] = {tmpPos[0], tmpPos[1], tmpPos[2]};
+
+  std::cerr << "Camera position " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
 
   // Look at the OpenGL Camera for the exact aspect computation
   double aspect[2];
