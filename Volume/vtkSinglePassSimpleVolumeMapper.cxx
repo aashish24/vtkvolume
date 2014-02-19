@@ -245,7 +245,7 @@ public:
     this->ColorKnots = std::vector<TransferControlPoint>();
     this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 0));
     this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 128));
-    this->ColorKnots.push_back(TransferControlPoint(0.2, 0.8, 0.2, 256));
+    this->ColorKnots.push_back(TransferControlPoint(0.0, 1.0, 0.0, 256));
     this->ColorKnots.push_back(TransferControlPoint(0.0, 1.0, 0.0, 512));
 
     this->AlphaKnots = std::vector<TransferControlPoint>();
@@ -383,19 +383,19 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
   // Set the mipmap levels (base and max)
-//  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
-//  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 4);
+  //  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
+  //  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 4);
 
   GL_CHECK_ERRORS
 
   // Allocate data with internal format and foramt as (GL_RED)
-  GLint internalFormat=0;
-  GLenum format=0;
-  GLenum type=0;
+  GLint internalFormat = 0;
+  GLenum format = 0;
+  GLenum type = 0;
 
-  double shift=0.0;
-  double scale=1.0;
-  int needTypeConversion=0;
+  double shift = 0.0;
+  double scale = 1.0;
+  int needTypeConversion = 0;
 
  // @aashish: tableRange is for transform function in existing VTK code.
  double tableRange[2];
@@ -407,46 +407,46 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
                           this->Parent->ArrayName,
                           this->CellFlag);
 
-  int scalarType=scalars->GetDataType();
+  int scalarType = scalars->GetDataType();
   if(scalars->GetNumberOfComponents()==4)
     {
     // this is RGBA, unsigned char only
-    internalFormat=GL_RGBA16;
-    format=GL_RGBA;
-    type=GL_UNSIGNED_BYTE;
+    internalFormat = GL_RGBA16;
+    format = GL_RGBA;
+    type = GL_UNSIGNED_BYTE;
     }
   else
     {
     switch(scalarType)
       {
       case VTK_FLOAT:
-//          if(this->Supports_GL_ARB_texture_float)
-//            {
-//            internalFormat=vtkgl::INTENSITY16F_ARB;
-//            }
-//          else
-//            {
-            internalFormat=GL_INTENSITY16;
-//            }
-        format=GL_RED;
-        type=GL_FLOAT;
+        //          if(this->Supports_GL_ARB_texture_float)
+        //            {
+        //            internalFormat = vtkgl::INTENSITY16F_ARB;
+        //            }
+        //          else
+        //            {
+            internalFormat = GL_INTENSITY16;
+        //            }
+        format = GL_RED;
+        type = GL_FLOAT;
         shift=-tableRange[0];
-        scale=1/(tableRange[1]-tableRange[0]);
+        scale = 1/(tableRange[1]-tableRange[0]);
         break;
       case VTK_UNSIGNED_CHAR:
-        internalFormat=GL_INTENSITY8;
-        format=GL_RED;
-        type=GL_UNSIGNED_BYTE;
-        shift=-tableRange[0]/VTK_UNSIGNED_CHAR_MAX;
-        scale=
+        internalFormat = GL_INTENSITY8;
+        format = GL_RED;
+        type = GL_UNSIGNED_BYTE;
+        shift = -tableRange[0]/VTK_UNSIGNED_CHAR_MAX;
+        scale =
           VTK_UNSIGNED_CHAR_MAX/(tableRange[1]-tableRange[0]);
         break;
       case VTK_SIGNED_CHAR:
-        internalFormat=GL_INTENSITY8;
-        format=GL_RED;
-        type=GL_BYTE;
+        internalFormat = GL_INTENSITY8;
+        format = GL_RED;
+        type = GL_BYTE;
         shift=-(2*tableRange[0]+1)/VTK_UNSIGNED_CHAR_MAX;
-        scale=VTK_SIGNED_CHAR_MAX/(tableRange[1]-tableRange[0]);
+        scale = VTK_SIGNED_CHAR_MAX/(tableRange[1]-tableRange[0]);
         break;
       case VTK_CHAR:
         // not supported
@@ -461,11 +461,11 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
         assert("check: impossible case" && 0);
         break;
       case VTK_INT:
-        internalFormat=GL_INTENSITY16;
-        format=GL_RED;
-        type=GL_INT;
+        internalFormat = GL_INTENSITY16;
+        format = GL_RED;
+        type = GL_INT;
         shift=-(2*tableRange[0]+1)/VTK_UNSIGNED_INT_MAX;
-        scale=VTK_INT_MAX/(tableRange[1]-tableRange[0]);
+        scale = VTK_INT_MAX/(tableRange[1]-tableRange[0]);
         break;
       case VTK_DOUBLE:
       case VTK___INT64:
@@ -474,48 +474,48 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
       case VTK_UNSIGNED___INT64:
       case VTK_UNSIGNED_LONG:
       case VTK_UNSIGNED_LONG_LONG:
-//          needTypeConversion=1; // to float
-//          if(this->Supports_GL_ARB_texture_float)
-//            {
-//            internalFormat=vtkgl::INTENSITY16F_ARB;
-//            }
-//          else
-//            {
-//            internalFormat=GL_INTENSITY16;
-//            }
-//          format=GL_RED;
-//          type=GL_FLOAT;
-//          shift=-tableRange[0];
-//          scale=1/(tableRange[1]-tableRange[0]);
-//          sliceArray=vtkFloatArray::New();
+        //          needTypeConversion = 1; // to float
+        //          if(this->Supports_GL_ARB_texture_float)
+        //            {
+        //            internalFormat = vtkgl::INTENSITY16F_ARB;
+        //            }
+        //          else
+        //            {
+        //            internalFormat = GL_INTENSITY16;
+        //            }
+        //          format = GL_RED;
+        //          type = GL_FLOAT;
+        //          shift=-tableRange[0];
+        //          scale = 1/(tableRange[1]-tableRange[0]);
+        //          sliceArray = vtkFloatArray::New();
         break;
       case VTK_SHORT:
-        internalFormat=GL_INTENSITY16;
-        format=GL_RED;
-        type=GL_SHORT;
+        internalFormat = GL_INTENSITY16;
+        format = GL_RED;
+        type = GL_SHORT;
         shift=-(2*tableRange[0]+1)/VTK_UNSIGNED_SHORT_MAX;
-        scale=VTK_SHORT_MAX/(tableRange[1]-tableRange[0]);
+        scale = VTK_SHORT_MAX/(tableRange[1]-tableRange[0]);
         break;
       case VTK_STRING:
         // not supported
         assert("check: impossible case" && 0);
         break;
       case VTK_UNSIGNED_SHORT:
-        internalFormat=GL_INTENSITY16;
-        format=GL_RED;
-        type=GL_UNSIGNED_SHORT;
+        internalFormat = GL_INTENSITY16;
+        format = GL_RED;
+        type = GL_UNSIGNED_SHORT;
 
         shift=-tableRange[0]/VTK_UNSIGNED_SHORT_MAX;
         scale=
           VTK_UNSIGNED_SHORT_MAX/(tableRange[1]-tableRange[0]);
         break;
       case VTK_UNSIGNED_INT:
-        internalFormat=GL_INTENSITY16;
-        format=GL_RED;
-        type=GL_UNSIGNED_INT;
+        internalFormat = GL_INTENSITY16;
+        format = GL_RED;
+        type = GL_UNSIGNED_INT;
 
         shift=-tableRange[0]/VTK_UNSIGNED_INT_MAX;
-        scale=VTK_UNSIGNED_INT_MAX/(tableRange[1]-tableRange[0]);
+        scale = VTK_UNSIGNED_INT_MAX/(tableRange[1]-tableRange[0]);
         break;
       default:
         assert("check: impossible case" && 0);

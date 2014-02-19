@@ -54,18 +54,15 @@ int main(int argc, char *argv[])
     {
     std::string filename = argv[1];
     std::string ext = vtksys::SystemTools::GetFilenameLastExtension(filename);
-    std::string filePathWOExt = vtksys::SystemTools::GetFilenameWithoutLastExtension(filename);
     if (ext == ".raw")
       {
       vtkNew<vtkImageReader> reader;
       reader->SetFileName(filename.c_str());
-//      reader->SetDataByteOrderToBigEndian();
       reader->SetDataScalarTypeToUnsignedChar();
+      // TODO Somehow figure out the extents from the file
       reader->SetDataExtent(0, 255, 0, 255, 0, 255);
+      // Assuming 3D data which is a safe assumption
       reader->SetFileDimensionality(3);
-//      reader->SetDataOrigin(0.0, 0.0, 0.0);
-//      reader->SetNumberOfScalarComponents(1);
-//      reader->SetFileLowerLeft(1);
       reader->Update();
       volumeMapper->SetInputConnection(reader->GetOutputPort());
       }
