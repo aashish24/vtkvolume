@@ -44,6 +44,7 @@
 #include <vtksys/SystemTools.hxx>
 
 #include <vtkImageReader.h>
+#include <vtkStructuredPointsReader.h>
 
 int main(int argc, char *argv[])
 {
@@ -66,6 +67,13 @@ int main(int argc, char *argv[])
       reader->Update();
       volumeMapper->SetInputConnection(reader->GetOutputPort());
       }
+    else if (ext == ".vtk")
+      {
+      vtkNew<vtkStructuredPointsReader> reader;
+      reader->SetFileName(argv[1]);
+      reader->Update();
+      volumeMapper->SetInputConnection(reader->GetOutputPort());
+      }
     }
   else
     {
@@ -84,7 +92,6 @@ int main(int argc, char *argv[])
 
   vtkNew<vtkRenderWindowInteractor> iren;
   iren->SetRenderWindow(renWin.GetPointer());
-  renWin->Delete();
 
   // Make sure we have an OpenGL context.
   renWin->Render();

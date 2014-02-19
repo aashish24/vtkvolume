@@ -9,7 +9,7 @@ foreach(example_src ${example_srcs})
   target_link_libraries("${example_name}"
     vtkRenderingVolumeOpenGL vtkRenderingOpenGL vtkFiltersGeneral
     vtkImagingHybrid vtkRenderingFreeTypeOpenGL vtkInteractionStyle
-    vtkTestingRendering vtkFiltersSources vtksys
+    vtkTestingRendering vtkFiltersSources vtksys vtkIOLegacy
     vtkVolume
   )
 endforeach()
