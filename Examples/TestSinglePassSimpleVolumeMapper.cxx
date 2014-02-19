@@ -55,24 +55,16 @@ int main(int argc, char *argv[])
     {
     std::string filename = argv[1];
     std::string ext = vtksys::SystemTools::GetFilenameLastExtension(filename);
-    if (ext == ".raw")
-      {
-      vtkNew<vtkImageReader> reader;
-      reader->SetFileName(filename.c_str());
-      reader->SetDataScalarTypeToUnsignedChar();
-      // TODO Somehow figure out the extents from the file
-      reader->SetDataExtent(0, 255, 0, 255, 0, 255);
-      // Assuming 3D data which is a safe assumption
-      reader->SetFileDimensionality(3);
-      reader->Update();
-      volumeMapper->SetInputConnection(reader->GetOutputPort());
-      }
-    else if (ext == ".vtk")
+    if (ext == ".vtk")
       {
       vtkNew<vtkStructuredPointsReader> reader;
       reader->SetFileName(argv[1]);
       reader->Update();
       volumeMapper->SetInputConnection(reader->GetOutputPort());
+      }
+    else
+      {
+      std::cerr << "File format " << ext << " is not supported " << std::endl;
       }
     }
   else
