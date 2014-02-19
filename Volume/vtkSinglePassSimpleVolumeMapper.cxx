@@ -1,4 +1,6 @@
 #include "vtkSinglePassSimpleVolumeMapper.h"
+#include "vtkTransferControlPoint.h"
+#include "vtkCubic.h"
 
 #include "GLSLShader.h"
 
@@ -13,7 +15,6 @@
 #include <vtkSmartPointer.h>
 #include <vtkPoints.h>
 #include <vtkFloatArray.h>
-#include <vtkVector.h>
 
 #include <GL/glew.h>
 #include <vtkgl.h>
@@ -29,211 +30,6 @@ vtkStandardNewMacro(vtkSinglePassSimpleVolumeMapper);
   assert(glGetError()== GL_NO_ERROR); \
   }
 
-class vtkVector4d : public vtkVector<double, 4>
-{
-public:
-  vtkVector4d() {}
-  vtkVector4d(double x, double y, double z, double w) : vtkVector<double, 4>()
-    {
-    this->Data[0] = x;
-    this->Data[1] = y;
-    this->Data[2] = z;
-    this->Data[3] = w;
-    }
-  explicit vtkVector4d(double scalar) : vtkVector<double, 4>(scalar)
-    {
-    this->Data[0] = scalar;
-    this->Data[1] = scalar;
-    this->Data[2] = scalar;
-    this->Data[3] = scalar;
-    }
-  explicit vtkVector4d(const double *init) : vtkVector<double, 4>(init) {}
-  vtkVectorDerivedMacro(vtkVector4d, double, 4)
-//  vtkVector4Cross(vtkVector4d, double)
-};
-
-vtkVector4d operator*(const vtkVector4d& vec4d, float scalar)
-{
-    vtkVector4d out;
-    out[0] = vec4d[0] * scalar;
-    out[1] = vec4d[1] * scalar;
-    out[2] = vec4d[2] * scalar;
-    out[3] = vec4d[3] * scalar;
-
-    return out;
-}
-
-vtkVector4d operator*(int scalar, const vtkVector4d& vec4d)
-{
-    vtkVector4d out;
-    out[0] = vec4d[0] * scalar;
-    out[1] = vec4d[1] * scalar;
-    out[2] = vec4d[2] * scalar;
-    out[3] = vec4d[3] * scalar;
-
-    return out;
-}
-
-vtkVector4d operator*(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
-{
-    vtkVector4d out;
-    out[0] = vec4d1[0] * vec4d2[0];
-    out[1] = vec4d1[1] * vec4d2[1];
-    out[2] = vec4d1[2] * vec4d2[2];
-    out[3] = vec4d1[3] * vec4d2[3];
-
-    return out;
-}
-
-vtkVector4d operator/(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
-{
-    vtkVector4d out;
-    out[0] = vec4d1[0] / vec4d2[0];
-    out[1] = vec4d1[1] / vec4d2[1];
-    out[2] = vec4d1[2] / vec4d2[2];
-    out[3] = vec4d1[3] / vec4d2[3];
-
-    return out;
-}
-
-vtkVector4d operator+(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
-{
-    vtkVector4d out;
-    out[0] = vec4d1[0] + vec4d2[0];
-    out[1] = vec4d1[1] + vec4d2[1];
-    out[2] = vec4d1[2] + vec4d2[2];
-    out[3] = vec4d1[3] + vec4d2[3];
-
-    return out;
-}
-
-vtkVector4d operator-(const vtkVector4d& vec4d1, const vtkVector4d& vec4d2)
-{
-    vtkVector4d out;
-    out[0] = vec4d1[0] - vec4d2[0];
-    out[1] = vec4d1[1] - vec4d2[1];
-    out[2] = vec4d1[2] - vec4d2[2];
-    out[3] = vec4d1[3] - vec4d2[3];
-
-    return out;
-}
-
-// Class that implements control point for the transfer function
-class TransferControlPoint
-{
-public:
-    vtkVector4d Color;
-    int IsoValue;
-
-    TransferControlPoint(double r, double g, double b, int isovalue)
-    {
-      Color[0] = r;
-      Color[1] = g;
-      Color[2] = b;
-      Color[3] = 1.0f;
-      IsoValue = isovalue;
-    }
-
-    TransferControlPoint(double alpha, int isovalue)
-    {
-      Color[0] = 0.0;
-      Color[1] = 0.0;
-      Color[2] = 0.0;
-      Color[3] = alpha;
-      IsoValue = isovalue;
-    }
-};
-
-/// Cubic class that calculates the cubic spline from a set of control points/knots
-/// and performs cubic interpolation.
-///
-/// Based on the natural cubic spline code from:
-/// http://www.cse.unsw.edu.au/~lambert/splines/natcubic.html
-class Cubic
-{
-private:
-  vtkVector4d a, b, c, d; // a + b*s + c*s^2 +d*s^3
-
-public:
-  Cubic()
-    {
-    }
-
-  Cubic(vtkVector4d a, vtkVector4d b, vtkVector4d c, vtkVector4d d)
-    {
-    this->a = a;
-    this->b = b;
-    this->c = c;
-    this->d = d;
-    }
-
-  // Evaluate the point using a cubic equation
-  vtkVector4d GetPointOnSpline(float s)
-    {
-    return (((d * s) + c) * s + b) * s + a;
-    }
-
-  static std::vector<Cubic> CalculateCubicSpline(int n, std::vector<TransferControlPoint> v)
-    {
-    std::vector<vtkVector4d> gamma;
-    std::vector<vtkVector4d> delta;
-    std::vector<vtkVector4d> D;
-
-    gamma.resize(n + 1);
-    delta.resize(n + 1);
-    D.resize(n + 1);
-
-    int i;
-    /* We need to solve the equation
-     * taken from: http://mathworld.wolfram.com/CubicSpline.html
-       [2 1       ] [D[0]]   [3(v[1] - v[0])  ]
-       |1 4 1     | |D[1]|   |3(v[2] - v[0])  |
-       |  1 4 1   | | .  | = |      .         |
-       |    ..... | | .  |   |      .         |
-       |     1 4 1| | .  |   |3(v[n] - v[n-2])|
-       [       1 2] [D[n]]   [3(v[n] - v[n-1])]
-
-       by converting the matrix to upper triangular.
-       The D[i] are the derivatives at the control points.
-     */
-
-    // This builds the coefficients of the left matrix
-    gamma[0][0] = 1.0f / 2.0f;
-    gamma[0][1] = 1.0f / 2.0f;
-    gamma[0][2] = 1.0f / 2.0f;
-    gamma[0][3] = 1.0f / 2.0f;
-
-    for (i = 1; i < n; i++)
-      {
-      gamma[i] = vtkVector4d(1) / ((4 * vtkVector4d(1)) - gamma[i - 1]);
-      }
-    gamma[n] = vtkVector4d(1) / ((2 * vtkVector4d(1)) - gamma[n - 1]);
-
-    delta[0] = 3 * (v[1].Color - v[0].Color) * gamma[0];
-    for (i = 1; i < n; i++)
-      {
-      delta[i] = (3 * (v[i + 1].Color - v[i - 1].Color) - delta[i - 1]) * gamma[i];
-      }
-    delta[n] = (3 * (v[n].Color - v[n - 1].Color) - delta[n - 1]) * gamma[n];
-
-    D[n] = delta[n];
-    for (i = n - 1; i >= 0; i--)
-      {
-      D[i] = delta[i] - gamma[i] * D[i + 1];
-      }
-
-    // Now compute the coefficients of the cubics
-    std::vector<Cubic> C;
-    C.resize(n);
-    for (i = 0; i < n; i++)
-      {
-      C[i] = Cubic(v[i].Color, D[i], 3 * (v[i + 1].Color - v[i].Color) - 2 * D[i] - D[i + 1],
-             2 * (v[i].Color - v[i + 1].Color) + D[i] + D[i + 1]);
-      }
-    return C;
-  }
-};
-
 // Class that hides implementation details
 class vtkSinglePassSimpleVolumeMapper::vtkInternal
 {
@@ -242,18 +38,18 @@ public:
     Parent(parent),
     VolmeLoaded(false), Initialized(false), ValidTransferFunction(false)
     {
-    this->ColorKnots = std::vector<TransferControlPoint>();
-    this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 0));
-    this->ColorKnots.push_back(TransferControlPoint(0.0, 0.0, 0.0, 128));
-    this->ColorKnots.push_back(TransferControlPoint(0.0, 1.0, 0.0, 256));
-    this->ColorKnots.push_back(TransferControlPoint(0.0, 1.0, 0.0, 512));
+    this->ColorKnots = std::vector<vtkTransferControlPoint>();
+    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 0.0, 0.0, 0));
+    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 0.0, 0.0, 128));
+    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 1.0, 0.0, 256));
+    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 1.0, 0.0, 512));
 
-    this->AlphaKnots = std::vector<TransferControlPoint>();
-    this->AlphaKnots.push_back(TransferControlPoint(0.0f, 0));
-    this->AlphaKnots.push_back(TransferControlPoint(0.025f, 50));
-    this->AlphaKnots.push_back(TransferControlPoint(0.05f, 100));
-    this->AlphaKnots.push_back(TransferControlPoint(0.1f, 256));
-    this->AlphaKnots.push_back(TransferControlPoint(0.2f, 512));
+    this->AlphaKnots = std::vector<vtkTransferControlPoint>();
+    this->AlphaKnots.push_back(vtkTransferControlPoint(0.0f, 0));
+    this->AlphaKnots.push_back(vtkTransferControlPoint(0.025f, 50));
+    this->AlphaKnots.push_back(vtkTransferControlPoint(0.05f, 100));
+    this->AlphaKnots.push_back(vtkTransferControlPoint(0.1f, 256));
+    this->AlphaKnots.push_back(vtkTransferControlPoint(0.2f, 512));
     }
 
   ~vtkInternal()
@@ -296,8 +92,8 @@ public:
   int TextureSize[3];
   int TextureExtents[6];
 
-  std::vector<TransferControlPoint> ColorKnots;
-  std::vector<TransferControlPoint> AlphaKnots;
+  std::vector<vtkTransferControlPoint> ColorKnots;
+  std::vector<vtkTransferControlPoint> AlphaKnots;
 };
 
 // Helper method for computing the transfer function
@@ -314,8 +110,8 @@ void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
     }
 
   // Fit a cubic spline for the transfer function
-  std::vector<Cubic> colorCubic = Cubic::CalculateCubicSpline(ColorKnots.size() - 1, ColorKnots);
-  std::vector<Cubic> alphaCubic = Cubic::CalculateCubicSpline(AlphaKnots.size() - 1, AlphaKnots);
+  std::vector<vtkCubic> colorCubic = vtkCubic::CalculateCubicSpline(ColorKnots.size() - 1, ColorKnots);
+  std::vector<vtkCubic> alphaCubic = vtkCubic::CalculateCubicSpline(AlphaKnots.size() - 1, AlphaKnots);
 
   int numTF = 0;
   for (int i = 0; i < ColorKnots.size() - 1; i++)
