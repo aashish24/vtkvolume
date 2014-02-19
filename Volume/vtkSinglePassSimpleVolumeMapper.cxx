@@ -474,20 +474,20 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
       case VTK_UNSIGNED___INT64:
       case VTK_UNSIGNED_LONG:
       case VTK_UNSIGNED_LONG_LONG:
-        //          needTypeConversion = 1; // to float
-        //          if(this->Supports_GL_ARB_texture_float)
-        //            {
-        //            internalFormat = vtkgl::INTENSITY16F_ARB;
-        //            }
-        //          else
-        //            {
-        //            internalFormat = GL_INTENSITY16;
-        //            }
-        //          format = GL_RED;
-        //          type = GL_FLOAT;
-        //          shift=-tableRange[0];
-        //          scale = 1/(tableRange[1]-tableRange[0]);
-        //          sliceArray = vtkFloatArray::New();
+      //          needTypeConversion = 1; // to float
+      //          if(this->Supports_GL_ARB_texture_float)
+      //            {
+      //            internalFormat = vtkgl::INTENSITY16F_ARB;
+      //            }
+      //          else
+      //            {
+      //            internalFormat = GL_INTENSITY16;
+      //            }
+      //          format = GL_RED;
+      //          type = GL_FLOAT;
+      //          shift=-tableRange[0];
+      //          scale = 1/(tableRange[1]-tableRange[0]);
+      //          sliceArray = vtkFloatArray::New();
         break;
       case VTK_SHORT:
         internalFormat = GL_INTENSITY16;
@@ -641,13 +641,13 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 //  bounds[3] += 1;
 //  bounds[5] += 1;
 
-//  std::cerr << "bounds "
-//            << bounds[0] << " "
-//            << bounds[1] << " "
-//            << bounds[2] << " "
-//            << bounds[3] << " "
-//            << bounds[4] << " "
-//            << bounds[5] << " " << std::endl;
+  std::cerr << "bounds "
+            << bounds[0] << " "
+            << bounds[1] << " "
+            << bounds[2] << " "
+            << bounds[3] << " "
+            << bounds[4] << " "
+            << bounds[5] << " " << std::endl;
 
   if (!this->Implementation->IsInitialized())
     {
