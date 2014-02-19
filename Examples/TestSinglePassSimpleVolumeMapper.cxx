@@ -78,12 +78,11 @@ int main(int argc, char *argv[])
     }
 
   vtkNew<vtkRenderWindow> renWin;
-  vtkNew<vtkRenderer> ren1;
-  ren1->SetBackground(0.2, 0.2, 0.5);
+  vtkNew<vtkRenderer> ren;
+  ren->SetBackground(0.2, 0.2, 0.5);
 
   // Intentional odd and NPOT  width/height
-  renWin->AddRenderer(ren1.GetPointer());
-  ren1->Delete();
+  renWin->AddRenderer(ren.GetPointer());
   renWin->SetSize(800, 800);
 
   vtkNew<vtkRenderWindowInteractor> iren;
@@ -101,11 +100,11 @@ int main(int argc, char *argv[])
   volume->SetMapper(volumeMapper.GetPointer());
   volume->SetProperty(volumeProperty.GetPointer());
 
-  ren1->AddViewProp(volume.GetPointer());
-  ren1->ResetCamera();
+  ren->AddViewProp(volume.GetPointer());
+  ren->ResetCamera();
 
   renWin->Render();
-  ren1->ResetCamera();
+  ren->ResetCamera();
 
   iren->Start();
 }
