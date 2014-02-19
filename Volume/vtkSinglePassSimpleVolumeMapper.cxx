@@ -668,11 +668,13 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
         this->Implementation->shader.AddUniform("vol_extents_min");
         this->Implementation->shader.AddUniform("vol_extents_max");
 
-        //pass constant uniforms at initialization
+        // Pass constant uniforms at initialization
+        // Step should be dependant on the bounds and not on the texture size
+        // since we can have non uniform voxel size / spacing / aspect ratio
         glUniform3f(this->Implementation->shader("step_size"),
-                    1.0f/(this->Implementation->TextureSize[0]),
-                    1.0f/(this->Implementation->TextureSize[1]),
-                    1.0f/(this->Implementation->TextureSize[2]));
+                    1.0f / (bounds[1] - bounds[0]),
+                    1.0f / (bounds[3] - bounds[2]),
+                    1.0f / (bounds[5] - bounds[4]));
         glUniform1i(this->Implementation->shader("volume"), 0);
         glUniform1i(this->Implementation->shader("transfer_func"), 1);
 
