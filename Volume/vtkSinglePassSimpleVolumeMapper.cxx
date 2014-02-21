@@ -455,10 +455,11 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     this->Implementation->shader.CreateAndLinkProgram();
     this->Implementation->shader.Use();
         // Add attributes and uniforms
-        this->Implementation->shader.AddAttribute("vVertex");
-        this->Implementation->shader.AddUniform("MVP");
+        this->Implementation->shader.AddAttribute("in_vertex_pos");
+        this->Implementation->shader.AddUniform("modelview_matrix");
+        this->Implementation->shader.AddUniform("projection_matrix");
         this->Implementation->shader.AddUniform("volume");
-        this->Implementation->shader.AddUniform("camPos");
+        this->Implementation->shader.AddUniform("camera_pos");
         this->Implementation->shader.AddUniform("step_size");
         this->Implementation->shader.AddUniform("transfer_func");
         this->Implementation->shader.AddUniform("vol_extents_min");
@@ -583,8 +584,8 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
     // Enable vertex attributre array for position
     // and pass indices to element array  buffer
-    glEnableVertexAttribArray(this->Implementation->shader["tVertex"]);
-    glVertexAttribPointer(this->Implementation->shader["tVertex"], 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(this->Implementation->shader["in_vertex_pos"]);
+    glVertexAttribPointer(this->Implementation->shader["in_vertex_pos"], 3, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesID);
     glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
@@ -622,21 +623,38 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   ren->ComputeAspect();
   ren->GetAspect(aspect);
 
-  vtkMatrix4x4* projMat = ren->GetActiveCamera()->
-    GetCompositeProjectionTransformMatrix(aspect[0], -1, 1);
-  projMat->Transpose();
+  double clippingRange[2];
+  ren->GetActiveCamera()->GetClippingRange(clippingRange);
 
-  float mvp[16];
+  // Will require transpose of this matrix for OpenGL
+  // Fix this
+  vtkMatrix4x4* projMat = ren->GetActiveCamera()->
+    GetProjectionTransformMatrix(aspect[0]/aspect[1], 0, 1);
+  float projectionMat[16];
   for (int i = 0; i < 4; ++i)
     {
     for (int j = 0; j < 4; ++j)
       {
-      mvp[i * 4 + j] = projMat->Element[i][j];
+      projectionMat[i * 4 + j] = projMat->Element[i][j];
       }
     }
 
-  glUniformMatrix4fv(this->Implementation->shader("MVP"), 1, GL_FALSE, &(mvp[0]));
-  glUniform3fv(this->Implementation->shader("camPos"), 1, &(pos[0]));
+  // Will require transpose of this matrix for OpenGL
+  // Fix this
+  vtkMatrix4x4* mvMat = ren->GetActiveCamera()->GetViewTransformMatrix();
+  float modelviewMat[16];
+  for (int i = 0; i < 4; ++i)
+    {
+    for (int j = 0; j < 4; ++j)
+      {
+      modelviewMat[i * 4 + j] = mvMat->Element[i][j];
+      }
+    }
+
+  glUniformMatrix4fv(this->Implementation->shader("projection_matrix"), 1, GL_FALSE, &(projectionMat[0]));
+  glUniformMatrix4fv(this->Implementation->shader("modelview_matrix"), 1, GL_FALSE, &(modelviewMat[0]));
+
+  glUniform3fv(this->Implementation->shader("camera_pos"), 1, &(pos[0]));
 
   float volExtentsMin[3] = {bounds[0], bounds[2], bounds[4]};
   float volExtentsMax[3] = {bounds[1], bounds[3], bounds[5]};
