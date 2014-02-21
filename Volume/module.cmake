@@ -1,0 +1,10 @@
+vtk_module(vtkVolume
+  DEPENDS
+    vtkCommonDataModel
+    vtkCommonExecutionModel
+  TEST_DEPENDS
+    vtkTestingCore
+    vtkRenderingOpenGL
+    vtkTestingRendering
+    vtkInteractionStyle
+)

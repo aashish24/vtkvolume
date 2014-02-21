@@ -16,8 +16,6 @@
 // This test volume renders a synthetic dataset with unsigned char values,
 // with the additive method.
 
-#include "../Volume/vtkSinglePassSimpleVolumeMapper.h"
-
 #include <vtkSphere.h>
 #include <vtkSampleFunction.h>
 
@@ -45,6 +43,8 @@
 
 #include <vtkImageReader.h>
 #include <vtkStructuredPointsReader.h>
+
+#include <vtkSinglePassSimpleVolumeMapper.h>
 
 int main(int argc, char *argv[])
 {

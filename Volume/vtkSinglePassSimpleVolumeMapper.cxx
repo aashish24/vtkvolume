@@ -523,57 +523,6 @@ void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       2,5,1  // back
       };
 
-//    float vertices[24][3] =
-//      {
-//      // Front
-//      {bounds[0], bounds[2], bounds[5]},
-//      {bounds[1], bounds[2], bounds[5]},
-//      {bounds[1], bounds[3], bounds[5]},
-//      {bounds[0], bounds[3], bounds[5]},
-//      // Right
-//      {bounds[1], bounds[2], bounds[5]},
-//      {bounds[1], bounds[2], bounds[4]},
-//      {bounds[1], bounds[3], bounds[4]},
-//      {bounds[1], bounds[3], bounds[5]},
-//      // Back
-//      {bounds[1], bounds[2], bounds[4]},
-//      {bounds[0], bounds[2], bounds[4]},
-//      {bounds[0], bounds[3], bounds[4]},
-//      {bounds[1], bounds[3], bounds[4]},
-//      // Left
-//      {bounds[0], bounds[2], bounds[4]},
-//      {bounds[0], bounds[2], bounds[5]},
-//      {bounds[0], bounds[3], bounds[5]},
-//      {bounds[0], bounds[3], bounds[4]},
-//      // Bottom
-//      {bounds[0], bounds[2], bounds[4]},
-//      {bounds[1], bounds[2], bounds[4]},
-//      {bounds[1], bounds[2], bounds[5]},
-//      {bounds[0], bounds[2], bounds[5]},
-//      // Top
-//      {bounds[0], bounds[3], bounds[5]},
-//      {bounds[1], bounds[3], bounds[5]},
-//      {bounds[1], bounds[3], bounds[4]},
-//      {bounds[0], bounds[3], bounds[4]}
-//    };
-
-//    // Cube indices
-//    GLushort cubeIndices[36]=
-//      {
-//      0, 1, 2,
-//      0, 2, 3,
-//      4, 5, 6,
-//      4, 6, 7,
-//      8, 9, 10,
-//      8, 10, 11,
-//      12, 13, 14,
-//      12, 14, 15,
-//      16, 17, 18,
-//      16, 18, 19,
-//      20, 21, 22,
-//      20, 22, 23
-//      };
-
     glBindVertexArray(this->Implementation->cubeVAOID);
 
     // pass cube vertices to buffer object memory

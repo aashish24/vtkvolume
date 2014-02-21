@@ -3,7 +3,6 @@
 ///
 /// Based on the natural cubic spline code from:
 /// http://www.cse.unsw.edu.au/~lambert/splines/natcubic.html
-///
 
 #include <vector>
 

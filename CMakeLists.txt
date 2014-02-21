@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 2.8.8)
 
+project(vtkNextGenVolumeRendering)
+
 # VTK is required
 set(VTK_REQUIRED_COMPONENTS
   # Core components
@@ -43,7 +45,10 @@ set(VTK_REQUIRED_COMPONENTS
 find_package(VTK NO_MODULE REQUIRED COMPONENTS ${VTK_REQUIRED_COMPONENTS})
 include(${VTK_USE_FILE})
 
+set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${VTK_CMAKE_DIR})
+include(vtkExternalModuleMacros)
+
 add_subdirectory(Volume)
 add_subdirectory(OpenGL)
 add_subdirectory(Testing)
-add_subdirectory(Examples)
+add_subdirectory(Apps)
