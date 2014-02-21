@@ -1,12 +1,16 @@
 #version 330 core
 
-// Fragment shader output
+/// Outputs
+///
+//////////////////////////////////////////////////////////////////////////////
+
+/// Fragment shader output
 layout(location = 0) out vec4 dst;
 
-// 3D texture coordinates form vertex shader
-smooth in vec3 vUVOut;
+/// 3D texture coordinates form vertex shader
+smooth in vec3 texture_coords;
 
-smooth in vec3 vOut;
+smooth in vec3 vertex_pos;
 
 /// Uniforms
 ///
@@ -28,13 +32,13 @@ uniform vec3 step_size;
 ///
 //////////////////////////////////////////////////////////////////////////////
 
-// Total samples for each ray march step
+/// Total samples for each ray march step
 const int MAX_SAMPLES = 300;
 
-// Minimum texture access coordinate
+/// Minimum texture access coordinate
 const vec3 texMin = vec3(0);
 
-// Maximum texture access coordinate
+/// Maximum texture access coordinate
 const vec3 texMax = vec3(1);
 
 /// Main
@@ -43,13 +47,13 @@ const vec3 texMax = vec3(1);
 void main()
 {
   // Get the 3D texture coordinates for lookup into the volume dataset
-  vec3 dataPos = vUVOut.xyz;
+  vec3 dataPos = texture_coords.xyz;
 
   // Getting the ray marching direction:
   // get the object space position by subracting 0.5 from the
   // 3D texture coordinates. Then subtraact it from camera position
   // and normalize to  get the ray marching direction
-  vec3 geomDir = normalize(vOut.xyz - camPos);
+  vec3 geomDir = normalize(vertex_pos.xyz - camPos);
 
   // Multiply the raymarching direction with the step size to get the
   //sub-step size we need to take at each raymarching step
