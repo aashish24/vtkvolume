@@ -44,11 +44,11 @@
 #include <vtkImageReader.h>
 #include <vtkStructuredPointsReader.h>
 
-#include <vtkSinglePassSimpleVolumeMapper.h>
+#include <vtkSinglePassVolumeMapper.h>
 
 int main(int argc, char *argv[])
 {
-  vtkNew<vtkSinglePassSimpleVolumeMapper> volumeMapper;
+  vtkNew<vtkSinglePassVolumeMapper> volumeMapper;
   volumeMapper->SetBlendModeToComposite();
 
   if (argc > 1)

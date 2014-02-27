@@ -1,4 +1,4 @@
-#include "vtkSinglePassSimpleVolumeMapper.h"
+#include "vtkSinglePassVolumeMapper.h"
 #include "vtkTransferControlPoint.h"
 #include "vtkCubic.h"
 
@@ -21,7 +21,7 @@
 
 #include <cassert>
 
-vtkStandardNewMacro(vtkSinglePassSimpleVolumeMapper);
+vtkStandardNewMacro(vtkSinglePassVolumeMapper);
 
 // Remove this afterwards
 #define GL_CHECK_ERRORS \
@@ -31,10 +31,10 @@ vtkStandardNewMacro(vtkSinglePassSimpleVolumeMapper);
   }
 
 // Class that hides implementation details
-class vtkSinglePassSimpleVolumeMapper::vtkInternal
+class vtkSinglePassVolumeMapper::vtkInternal
 {
 public:
-  vtkInternal(vtkSinglePassSimpleVolumeMapper* parent) :
+  vtkInternal(vtkSinglePassVolumeMapper* parent) :
     Parent(parent),
     VolmeLoaded(false), Initialized(false), ValidTransferFunction(false)
     {
@@ -72,7 +72,7 @@ public:
   bool HasValidTransferFunction();
   void ComputeTransferFunction();
 
-  vtkSinglePassSimpleVolumeMapper* Parent;
+  vtkSinglePassVolumeMapper* Parent;
 
   bool VolmeLoaded;
   bool Initialized;
@@ -97,7 +97,7 @@ public:
 };
 
 // Helper method for computing the transfer function
-void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
+void vtkSinglePassVolumeMapper::vtkInternal::ComputeTransferFunction()
 {
   const int width = 512;
   // Initialize the cubic spline for the transfer function
@@ -164,7 +164,7 @@ void vtkSinglePassSimpleVolumeMapper::vtkInternal::ComputeTransferFunction()
 }
 
 
-bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
+bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
 {
   // Generate OpenGL texture
   glEnable(GL_TEXTURE_3D);
@@ -362,38 +362,38 @@ bool vtkSinglePassSimpleVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imag
 }
 
 
-bool vtkSinglePassSimpleVolumeMapper::vtkInternal::IsVolmeLoaded()
+bool vtkSinglePassVolumeMapper::vtkInternal::IsVolmeLoaded()
 {
   return this->VolmeLoaded;
 }
 
 
-bool vtkSinglePassSimpleVolumeMapper::vtkInternal::IsInitialized()
+bool vtkSinglePassVolumeMapper::vtkInternal::IsInitialized()
 {
   return this->Initialized;
 }
 
 
-vtkSinglePassSimpleVolumeMapper::vtkSinglePassSimpleVolumeMapper() : vtkVolumeMapper()
+vtkSinglePassVolumeMapper::vtkSinglePassVolumeMapper() : vtkVolumeMapper()
 {
   this->Implementation = new vtkInternal(this);
 }
 
 
-vtkSinglePassSimpleVolumeMapper::~vtkSinglePassSimpleVolumeMapper()
+vtkSinglePassVolumeMapper::~vtkSinglePassVolumeMapper()
 {
   delete this->Implementation;
   this->Implementation = 0;
 }
 
 
-void vtkSinglePassSimpleVolumeMapper::PrintSelf(ostream &os, vtkIndent indent)
+void vtkSinglePassVolumeMapper::PrintSelf(ostream &os, vtkIndent indent)
 {
   // TODO Implement this method
 }
 
 
-void vtkSinglePassSimpleVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
+void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 {
   vtkImageData* input = this->GetInput();
 

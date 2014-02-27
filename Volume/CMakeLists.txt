@@ -6,7 +6,7 @@ find_package(GLEW REQUIRED)
 vtk_add_to_module_search_path(${vtkVolume_SOURCE_DIR} ${vtkVolume_BINARY_DIR})
 set(vtkVolume_HEADERS vtkCubic.h GLSLShader.h vtkSinglePassSimpleVolumeMapper.h vtkTransferControlPoint.h
     vtkVector4d.h)
-set(vtkVolume_SRCS vtkSinglePassSimpleVolumeMapper.cxx GLSLShader.cxx)
+set(vtkVolume_SRCS vtkSinglePassVolumeMapper.cxx GLSLShader.cxx)
 
 include(module.cmake)
 vtk_module_library(${PROJECT_NAME} ${vtkVolume_SRCS})
