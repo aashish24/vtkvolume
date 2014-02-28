@@ -36,20 +36,11 @@ class vtkSinglePassVolumeMapper::vtkInternal
 public:
   vtkInternal(vtkSinglePassVolumeMapper* parent) :
     Parent(parent),
-    VolmeLoaded(false), Initialized(false), ValidTransferFunction(false)
+    VolmeLoaded(false),
+    Initialized(false),
+    ValidTransferFunction(false),
+    TextureWidth(1024)
     {
-    this->ColorKnots = std::vector<vtkTransferControlPoint>();
-    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 0.0, 0.0, 0));
-    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 0.0, 0.0, 128));
-    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 1.0, 0.0, 256));
-    this->ColorKnots.push_back(vtkTransferControlPoint(0.0, 1.0, 0.0, 512));
-
-    this->AlphaKnots = std::vector<vtkTransferControlPoint>();
-    this->AlphaKnots.push_back(vtkTransferControlPoint(0.0f, 0));
-    this->AlphaKnots.push_back(vtkTransferControlPoint(0.025f, 50));
-    this->AlphaKnots.push_back(vtkTransferControlPoint(0.05f, 100));
-    this->AlphaKnots.push_back(vtkTransferControlPoint(0.1f, 256));
-    this->AlphaKnots.push_back(vtkTransferControlPoint(0.2f, 512));
     }
 
   ~vtkInternal()
@@ -91,6 +82,9 @@ public:
   int CellFlag;
   int TextureSize[3];
   int TextureExtents[6];
+  int TextureWidth;
+
+  double ScalarsRange[2];
 
   std::vector<vtkTransferControlPoint> ColorKnots;
   std::vector<vtkTransferControlPoint> AlphaKnots;
@@ -99,50 +93,55 @@ public:
 // Helper method for computing the transfer function
 void vtkSinglePassVolumeMapper::vtkInternal::ComputeTransferFunction()
 {
-  const int width = 512;
   // Initialize the cubic spline for the transfer function
-  float transferFunc[width*4];
+  float transferFunc[this->TextureWidth * 4];
 
   // Initialize to 0
-  for (int i = 0; i < width * 4; i++)
+  for (int i = 0; i < this->TextureWidth * 4; i++)
     {
     transferFunc[i] = 0.0;
     }
 
+  /// Compute color and alpha knots for a given scalar range.
+  this->ColorKnots = std::vector<vtkTransferControlPoint>();
+  this->ColorKnots.push_back(vtkTransferControlPoint(0.4, 0.4, 0.4, this->ScalarsRange[0]));
+  this->ColorKnots.push_back(vtkTransferControlPoint(0.8, 0.8, 0.8, this->ScalarsRange[1]));
+
+  this->AlphaKnots = std::vector<vtkTransferControlPoint>();
+  this->AlphaKnots.push_back(vtkTransferControlPoint(0.0, this->ScalarsRange[0]));
+  this->AlphaKnots.push_back(vtkTransferControlPoint(0.4, this->ScalarsRange[1]));
+
   // Fit a cubic spline for the transfer function
-  std::vector<vtkCubic> colorCubic = vtkCubic::CalculateCubicSpline(ColorKnots.size() - 1, ColorKnots);
-  std::vector<vtkCubic> alphaCubic = vtkCubic::CalculateCubicSpline(AlphaKnots.size() - 1, AlphaKnots);
+  std::vector<vtkCubic> colorCubic = vtkCubic::CalculateCubicSpline(
+                                       ColorKnots.size() - 1, ColorKnots);
+  std::vector<vtkCubic> alphaCubic = vtkCubic::CalculateCubicSpline(
+                                       AlphaKnots.size() - 1, AlphaKnots);
 
-  int numTF = 0;
-  for (int i = 0; i < ColorKnots.size() - 1; i++)
+  for (int i = 0; i < this->TextureWidth;)
     {
-    // Compute steps
-    int steps = ColorKnots[i + 1].IsoValue - ColorKnots[i].IsoValue;
+    // Map i to scalar range
+    double val = (static_cast<double>(i) / this->TextureWidth) *
+                 (this->ScalarsRange[1] - this->ScalarsRange[0]) + this->ScalarsRange[0];
 
-    // Now compute the color
-    for (int j = 0; j < steps; j++)
+    vtkVector4d color = colorCubic[0].GetPointOnSpline(val/(this->ScalarsRange[1] - this->ScalarsRange[0]));
+    //std::cerr << i << " " << val << " " << " color " << color[0] << " " << color[1] << " " << color[2] <<  std::endl;
+    for (int j = 0; j < 4; ++j)
       {
-      float k = (float)j / (float)(steps - 1);
-
-      vtkVector4d color = colorCubic[i].GetPointOnSpline(k);
-      for (int k = 0; k < 4; ++k)
-        {
-        transferFunc[numTF++] = color[k];
-        }
+      transferFunc[i++] = color[j];
       }
     }
 
-  numTF = 0;
-  for (int i = 0; i < AlphaKnots.size() - 1; i++)
+  for (int i = 0; i < this->TextureWidth;)
     {
-    int steps = AlphaKnots[i + 1].IsoValue - AlphaKnots[i].IsoValue;
-    for (int j = 0; j < steps; j++)
-      {
-      float k = (float)j / (float)(steps - 1);
+    // Map i to scalar range
+    double val = (static_cast<double>(i) / this->TextureWidth) *
+                 (this->ScalarsRange[1] - this->ScalarsRange[0]) + this->ScalarsRange[0];
 
-      vtkVector4d color = alphaCubic[i].GetPointOnSpline(k);
-      transferFunc[4 * (++numTF) - 1] = color[3];
-      }
+    vtkVector4d alpha = alphaCubic[0].GetPointOnSpline(val/(this->ScalarsRange[1] - this->ScalarsRange[0]));
+
+    std::cerr << i << " " << val << " " << " alpha " << alpha[3] << std::endl;
+
+    transferFunc[4 * (++i) - 1] = alpha[3];
     }
 
   // Generate OpenGL texture
@@ -158,7 +157,7 @@ void vtkSinglePassVolumeMapper::vtkInternal::ComputeTransferFunction()
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, width, 0, GL_RGBA, GL_FLOAT, transferFunc);
+  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, this->TextureWidth, 0, GL_RGBA, GL_FLOAT, transferFunc);
 
   this->ValidTransferFunction = true;
 }
@@ -166,12 +165,12 @@ void vtkSinglePassVolumeMapper::vtkInternal::ComputeTransferFunction()
 
 bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
 {
-  // Generate OpenGL texture
+  /// Generate OpenGL texture
   glEnable(GL_TEXTURE_3D);
   glGenTextures(1, &this->VolumeTexture);
   glBindTexture(GL_TEXTURE_3D, this->VolumeTexture);
 
-  // Set the texture parameters
+  /// Set the texture parameters
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP);
@@ -193,8 +192,8 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
   double scale = 1.0;
   int needTypeConversion = 0;
 
- // @aashish: tableRange is for transform function in existing VTK code.
- double tableRange[2];
+  /// @aashish: tableRange is for transform function in existing VTK code.
+  double tableRange[2];
 
   vtkDataArray* scalars = this->Parent->GetScalars(imageData,
                           this->Parent->ScalarMode,
@@ -202,6 +201,8 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
                           this->Parent->ArrayId,
                           this->Parent->ArrayName,
                           this->CellFlag);
+
+  scalars->GetRange(this->ScalarsRange);
 
   int scalarType = scalars->GetDataType();
   if(scalars->GetNumberOfComponents()==4)
