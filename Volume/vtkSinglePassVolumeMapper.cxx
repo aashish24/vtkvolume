@@ -1,20 +1,22 @@
-#include "vtkSinglePassVolumeMapper.h"
-#include "vtkTransferControlPoint.h"
-#include "vtkCubic.h"
+﻿#include "vtkSinglePassVolumeMapper.h"
 
 #include "GLSLShader.h"
+#include "vtkOpenGLOpacityTable.h"
+#include "vtkOpenGLVolumeRGBTable.h"
 
 #include <vtkObjectFactory.h>
 #include <vtkCamera.h>
+#include <vtkColorTransferFunction.h>
+#include <vtkFloatArray.h>
 #include <vtkImageData.h>
 #include <vtkMatrix4x4.h>
 #include <vtkPointData.h>
+#include <vtkPoints.h>
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
-#include <vtkUnsignedCharArray.h>
 #include <vtkSmartPointer.h>
-#include <vtkPoints.h>
-#include <vtkFloatArray.h>
+#include <vtkUnsignedCharArray.h>
+#include <vtkVolumeProperty.h>
 
 #include <GL/glew.h>
 #include <vtkgl.h>
@@ -23,49 +25,244 @@
 
 vtkStandardNewMacro(vtkSinglePassVolumeMapper);
 
-// Remove this afterwards
+/// TODO Remove this afterwards
 #define GL_CHECK_ERRORS \
   {\
   std::cerr << "Checking for error " << glGetError() << std::endl; \
   assert(glGetError()== GL_NO_ERROR); \
   }
 
-// Class that hides implementation details
+//--------------------------------------------------------------------------
+///
+/// \brief The vtkSinglePassVolumeMapper::vtkInternal class
+///
 class vtkSinglePassVolumeMapper::vtkInternal
 {
 public:
+  ///
+  /// \brief vtkInternal
+  /// \param parent
+  ///
   vtkInternal(vtkSinglePassVolumeMapper* parent) :
-    Parent(parent),
-    VolmeLoaded(false),
     Initialized(false),
     ValidTransferFunction(false),
-    TextureWidth(1024)
+    CellFlag(-1),
+    TextureWidth(1024),
+    Parent(parent),
+    RGBTable(0)
     {
+    this->TextureSize[0] = this->TextureSize[1] = this->TextureSize[2] = -1;
+    this->SampleDistance[0] = this->SampleDistance[1] =
+      this->SampleDistance[2];
+
+    // TODO Initialize extents and scalars range
     }
 
   ~vtkInternal()
     {
+    delete this->RGBTable;
+    this->RGBTable = 0;
+
+    delete this->OpacityTables;
+    this->OpacityTables = 0;
     }
 
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief Initialize
+  ///
+  void Initialize()
+    {
+    GLenum err = glewInit();
+    if (GLEW_OK != err)	{
+        cerr <<"Error: "<< glewGetErrorString(err)<<endl;
+    } else {
+        if (GLEW_VERSION_3_3)
+        {
+            cout<<"Driver supports OpenGL 3.3\nDetails:"<<endl;
+        }
+    }
+    /// This is to ignore INVALID ENUM error 1282
+    err = glGetError();
+    GL_CHECK_ERRORS
+
+    //output hardware information
+    cout<<"\tUsing GLEW "<< glewGetString(GLEW_VERSION)<<endl;
+    cout<<"\tVendor: "<< glGetString (GL_VENDOR)<<endl;
+    cout<<"\tRenderer: "<< glGetString (GL_RENDERER)<<endl;
+    cout<<"\tVersion: "<< glGetString (GL_VERSION)<<endl;
+    cout<<"\tGLSL: "<< glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
+
+    /// Load the raycasting shader
+    this->shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
+    this->shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
+
+    /// Compile and link the shader
+    this->shader.CreateAndLinkProgram();
+    this->shader.Use();
+
+    /// Add attributes and uniforms
+    this->shader.AddAttribute("in_vertex_pos");
+    this->shader.AddUniform("modelview_matrix");
+    this->shader.AddUniform("projection_matrix");
+    this->shader.AddUniform("volume");
+    this->shader.AddUniform("camera_pos");
+    this->shader.AddUniform("step_size");
+    this->shader.AddUniform("color_transfer_func");
+    this->shader.AddUniform("opacity_transfer_func");
+    this->shader.AddUniform("vol_extents_min");
+    this->shader.AddUniform("vol_extents_max");
+
+    // Setup unit cube vertex array and vertex buffer objects
+    glGenVertexArrays(1, &this->cubeVAOID);
+    glGenBuffers(1, &this->cubeVBOID);
+    glGenBuffers(1, &this->CubeIndicesID);
+    glGenBuffers(1, &this->CubeTextureID);
+
+    this->RGBTable = new vtkOpenGLVolumeRGBTable();
+
+    /// TODO Currently we are supporting only one level
+    this->OpacityTables = new vtkOpenGLOpacityTables(1);
+
+    this->shader.UnUse();
+
+    this->Initialized = true;
+    }
+
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief GetVolumeTexture
+  /// \return Volume texture ID
+  ///
   unsigned int GetVolumeTexture()
     {
-    return this->VolumeTexture;
+    return this->TextureId;
     }
 
-  unsigned int GetTransferFunctionSampler()
-    {
-    return this->TransferFuncSampler;
-    }
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief UpdateColorTransferFunction
+  /// \param vol
+  /// \param numberOfScalarComponents
+  /// \return 0 (passed) or 1 (failed)
+  ///
+  /// Update transfer color function based on the incoming inputs and number of
+  /// scalar components.
+  ///
+  /// TODO Deal with numberOfScalarComponents > 1
+  int UpdateColorTransferFunction(vtkVolume* vol, int numberOfScalarComponents)
+  {
+    /// Build the colormap in a 1D texture.
+    /// 1D RGB-texture=mapping from scalar values to color values
+    /// build the table.
+    if(numberOfScalarComponents == 1)
+      {
+      vtkVolumeProperty* volumeProperty = vol->GetProperty();
+      vtkColorTransferFunction* colorTransferFunction =
+        volumeProperty->GetRGBTransferFunction(0);
 
-  bool LoadVolume(vtkImageData* imageData);
-  bool IsVolmeLoaded();
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.0, 0.0, 0.0);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
+
+      /// Activate texture 1
+      glActiveTexture(GL_TEXTURE1);
+
+      this->RGBTable->Update(
+        colorTransferFunction, this->ScalarsRange,
+        volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
+
+      glActiveTexture(GL_TEXTURE0);
+      }
+    else
+      {
+      std::cerr << "SinglePass volume mapper does not handle multi-component scalars";
+      return 1;
+      }
+
+    return 0;
+  }
+
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief vtkOpenGLGPUVolumeRayCastMapper::UpdateOpacityTransferFunction
+  /// \param vol
+  /// \param numberOfScalarComponents (1 or 4)
+  /// \param level
+  /// \return 0 or 1 (fail)
+  ///
+  int UpdateOpacityTransferFunction(vtkVolume* vol, int numberOfScalarComponents,
+                                    unsigned int level)
+  {
+    if (!vol)
+      {
+      std::cerr << "Invalid volume" << std::endl;
+      return 1;
+      }
+
+    if (numberOfScalarComponents != 1)
+      {
+      std::cerr << "SinglePass volume mapper does not handle multi-component scalars";
+      return 1;
+      }
+
+    vtkVolumeProperty* volumeProperty = vol->GetProperty();
+    vtkPiecewiseFunction* scalarOpacity = volumeProperty->GetScalarOpacity();
+
+    /// TODO: Do a better job to create the default opacity map
+    scalarOpacity->AddPoint(this->ScalarsRange[0], 0.0);
+    scalarOpacity->AddPoint(this->ScalarsRange[1], 1.0);
+
+    /// Activate texture 2
+    glActiveTexture(GL_TEXTURE2);
+
+    this->OpacityTables->GetTable(level)->Update(
+      scalarOpacity,this->BlendMode,
+      this->SampleDistance,
+      this->ScalarsRange,
+      volumeProperty->GetScalarOpacityUnitDistance(0),
+      volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
+
+    /// Restore default active texture
+    glActiveTexture(GL_TEXTURE0);
+
+    return 0;
+  }
+
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief LoadVolume
+  /// \param imageData
+  /// \param scalars
+  /// \return
+  ///
+  bool LoadVolume(vtkImageData* imageData, vtkDataArray* scalars);
+
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief IsDataDirty
+  /// \param imageData
+  /// \return
+  ///
+  bool IsDataDirty(vtkImageData* imageData);
+
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief IsInitialized
+  /// \return
+  ///
   bool IsInitialized();
-  bool HasValidTransferFunction();
-  void ComputeTransferFunction();
 
-  vtkSinglePassVolumeMapper* Parent;
+  //--------------------------------------------------------------------------
+  ///
+  /// \brief HasBoundsChanged
+  /// \param bounds
+  /// \return
+  ///
+  bool HasBoundsChanged(double* bounds);
 
-  bool VolmeLoaded;
+  ///
+  /// Private member variables
+
   bool Initialized;
   bool ValidTransferFunction;
 
@@ -76,99 +273,40 @@ public:
 
   GLSLShader shader;
 
-  GLuint VolumeTexture;
+  GLuint TextureId;
   GLuint TransferFuncSampler;
 
   int CellFlag;
   int TextureSize[3];
   int TextureExtents[6];
   int TextureWidth;
+  int BlendMode;
 
   double ScalarsRange[2];
+  double Bounds[6];
+  double SampleDistance[3];
 
-  std::vector<vtkTransferControlPoint> ColorKnots;
-  std::vector<vtkTransferControlPoint> AlphaKnots;
+  vtkSinglePassVolumeMapper* Parent;
+  vtkOpenGLVolumeRGBTable* RGBTable;
+  vtkOpenGLOpacityTables* OpacityTables;
+
+  vtkTimeStamp VolumeBuildTime;
 };
 
-// Helper method for computing the transfer function
-void vtkSinglePassVolumeMapper::vtkInternal::ComputeTransferFunction()
-{
-  // Initialize the cubic spline for the transfer function
-  float transferFunc[this->TextureWidth * 4];
-
-  // Initialize to 0
-  for (int i = 0; i < this->TextureWidth * 4; i++)
-    {
-    transferFunc[i] = 0.0;
-    }
-
-  /// Compute color and alpha knots for a given scalar range.
-  this->ColorKnots = std::vector<vtkTransferControlPoint>();
-  this->ColorKnots.push_back(vtkTransferControlPoint(0.4, 0.4, 0.4, this->ScalarsRange[0]));
-  this->ColorKnots.push_back(vtkTransferControlPoint(0.8, 0.8, 0.8, this->ScalarsRange[1]));
-
-  this->AlphaKnots = std::vector<vtkTransferControlPoint>();
-  this->AlphaKnots.push_back(vtkTransferControlPoint(0.0, this->ScalarsRange[0]));
-  this->AlphaKnots.push_back(vtkTransferControlPoint(0.4, this->ScalarsRange[1]));
-
-  // Fit a cubic spline for the transfer function
-  std::vector<vtkCubic> colorCubic = vtkCubic::CalculateCubicSpline(
-                                       ColorKnots.size() - 1, ColorKnots);
-  std::vector<vtkCubic> alphaCubic = vtkCubic::CalculateCubicSpline(
-                                       AlphaKnots.size() - 1, AlphaKnots);
-
-  for (int i = 0; i < this->TextureWidth;)
-    {
-    // Map i to scalar range
-    double val = (static_cast<double>(i) / this->TextureWidth) *
-                 (this->ScalarsRange[1] - this->ScalarsRange[0]) + this->ScalarsRange[0];
-
-    vtkVector4d color = colorCubic[0].GetPointOnSpline(val/(this->ScalarsRange[1] - this->ScalarsRange[0]));
-    //std::cerr << i << " " << val << " " << " color " << color[0] << " " << color[1] << " " << color[2] <<  std::endl;
-    for (int j = 0; j < 4; ++j)
-      {
-      transferFunc[i++] = color[j];
-      }
-    }
-
-  for (int i = 0; i < this->TextureWidth;)
-    {
-    // Map i to scalar range
-    double val = (static_cast<double>(i) / this->TextureWidth) *
-                 (this->ScalarsRange[1] - this->ScalarsRange[0]) + this->ScalarsRange[0];
-
-    vtkVector4d alpha = alphaCubic[0].GetPointOnSpline(val/(this->ScalarsRange[1] - this->ScalarsRange[0]));
-
-    std::cerr << i << " " << val << " " << " alpha " << alpha[3] << std::endl;
-
-    transferFunc[4 * (++i) - 1] = alpha[3];
-    }
-
-  // Generate OpenGL texture
-  glEnable(GL_TEXTURE_1D);
-  glGenTextures(1, &this->TransferFuncSampler);
-  glBindTexture(GL_TEXTURE_1D, this->TransferFuncSampler);
-
-  // Set the texture parameters
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_R, GL_CLAMP);
-
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, this->TextureWidth, 0, GL_RGBA, GL_FLOAT, transferFunc);
-
-  this->ValidTransferFunction = true;
-}
-
-
-bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::vtkInternal::LoadVolume
+/// \param imageData
+/// \param scalars
+/// \return
+///
+bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
+                                                        vtkDataArray* scalars)
 {
   /// Generate OpenGL texture
   glEnable(GL_TEXTURE_3D);
-  glGenTextures(1, &this->VolumeTexture);
-  glBindTexture(GL_TEXTURE_3D, this->VolumeTexture);
+  glGenTextures(1, &this->TextureId);
+  glBindTexture(GL_TEXTURE_3D, this->TextureId);
 
   /// Set the texture parameters
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -177,13 +315,14 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
+  // TODO Make it configurable
   // Set the mipmap levels (base and max)
   //  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
   //  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 4);
 
   GL_CHECK_ERRORS
 
-  // Allocate data with internal format and foramt as (GL_RED)
+  /// Allocate data with internal format and foramt as (GL_RED)
   GLint internalFormat = 0;
   GLenum format = 0;
   GLenum type = 0;
@@ -192,22 +331,9 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
   double scale = 1.0;
   int needTypeConversion = 0;
 
-  /// @aashish: tableRange is for transform function in existing VTK code.
-  double tableRange[2];
-
-  vtkDataArray* scalars = this->Parent->GetScalars(imageData,
-                          this->Parent->ScalarMode,
-                          this->Parent->ArrayAccessMode,
-                          this->Parent->ArrayId,
-                          this->Parent->ArrayName,
-                          this->CellFlag);
-
-  scalars->GetRange(this->ScalarsRange);
-
   int scalarType = scalars->GetDataType();
   if(scalars->GetNumberOfComponents()==4)
     {
-    // this is RGBA, unsigned char only
     internalFormat = GL_RGBA16;
     format = GL_RGBA;
     type = GL_UNSIGNED_BYTE;
@@ -227,23 +353,23 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
         //            }
         format = GL_RED;
         type = GL_FLOAT;
-        shift=-tableRange[0];
-        scale = 1/(tableRange[1]-tableRange[0]);
+        shift=-ScalarsRange[0];
+        scale = 1/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       case VTK_UNSIGNED_CHAR:
         internalFormat = GL_INTENSITY8;
         format = GL_RED;
         type = GL_UNSIGNED_BYTE;
-        shift = -tableRange[0]/VTK_UNSIGNED_CHAR_MAX;
+        shift = -this->ScalarsRange[0]/VTK_UNSIGNED_CHAR_MAX;
         scale =
-          VTK_UNSIGNED_CHAR_MAX/(tableRange[1]-tableRange[0]);
+          VTK_UNSIGNED_CHAR_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       case VTK_SIGNED_CHAR:
         internalFormat = GL_INTENSITY8;
         format = GL_RED;
         type = GL_BYTE;
-        shift=-(2*tableRange[0]+1)/VTK_UNSIGNED_CHAR_MAX;
-        scale = VTK_SIGNED_CHAR_MAX/(tableRange[1]-tableRange[0]);
+        shift=-(2*this->ScalarsRange[0]+1)/VTK_UNSIGNED_CHAR_MAX;
+        scale = VTK_SIGNED_CHAR_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       case VTK_CHAR:
         // not supported
@@ -261,8 +387,8 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
         internalFormat = GL_INTENSITY16;
         format = GL_RED;
         type = GL_INT;
-        shift=-(2*tableRange[0]+1)/VTK_UNSIGNED_INT_MAX;
-        scale = VTK_INT_MAX/(tableRange[1]-tableRange[0]);
+        shift=-(2*this->ScalarsRange[0]+1)/VTK_UNSIGNED_INT_MAX;
+        scale = VTK_INT_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       case VTK_DOUBLE:
       case VTK___INT64:
@@ -282,16 +408,16 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
       //            }
       //          format = GL_RED;
       //          type = GL_FLOAT;
-      //          shift=-tableRange[0];
-      //          scale = 1/(tableRange[1]-tableRange[0]);
+      //          shift=-this->ScalarsRange[0];
+      //          scale = 1/(this->ScalarsRange[1]-this->ScalarsRange[0]);
       //          sliceArray = vtkFloatArray::New();
         break;
       case VTK_SHORT:
         internalFormat = GL_INTENSITY16;
         format = GL_RED;
         type = GL_SHORT;
-        shift=-(2*tableRange[0]+1)/VTK_UNSIGNED_SHORT_MAX;
-        scale = VTK_SHORT_MAX/(tableRange[1]-tableRange[0]);
+        shift=-(2*this->ScalarsRange[0]+1)/VTK_UNSIGNED_SHORT_MAX;
+        scale = VTK_SHORT_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       case VTK_STRING:
         // not supported
@@ -302,17 +428,17 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
         format = GL_RED;
         type = GL_UNSIGNED_SHORT;
 
-        shift=-tableRange[0]/VTK_UNSIGNED_SHORT_MAX;
+        shift=-this->ScalarsRange[0]/VTK_UNSIGNED_SHORT_MAX;
         scale=
-          VTK_UNSIGNED_SHORT_MAX/(tableRange[1]-tableRange[0]);
+          VTK_UNSIGNED_SHORT_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       case VTK_UNSIGNED_INT:
         internalFormat = GL_INTENSITY16;
         format = GL_RED;
         type = GL_UNSIGNED_INT;
 
-        shift=-tableRange[0]/VTK_UNSIGNED_INT_MAX;
-        scale = VTK_UNSIGNED_INT_MAX/(tableRange[1]-tableRange[0]);
+        shift=-this->ScalarsRange[0]/VTK_UNSIGNED_INT_MAX;
+        scale = VTK_UNSIGNED_INT_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
       default:
         assert("check: impossible case" && 0);
@@ -328,26 +454,14 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
   this->TextureExtents[4] = ext[4];
   this->TextureExtents[5] = ext[5];
 
-  std::cerr << "TextureExtents "
-            << this->TextureExtents[0] << " "
-            << this->TextureExtents[1] << " "
-            << this->TextureExtents[2] << " "
-            << this->TextureExtents[3] << " "
-            << this->TextureExtents[4] << " "
-            << this->TextureExtents[5] << std::endl;
-
   void* dataPtr = scalars->GetVoidPointer(0);
   int i = 0;
   while(i < 3)
     {
-    this->TextureSize[i] = this->TextureExtents[2*i+1]-this->TextureExtents[2*i]+1;
+    this->TextureSize[i] = this->TextureExtents[2*i+1] - this->TextureExtents[2*i] + 1;
     ++i;
     }
 
-  std::cerr << "TextureSize "
-            << TextureSize[0] << " "
-            << TextureSize[1] << " "
-            << TextureSize[2] << std::endl;
 
   glTexImage3D(GL_TEXTURE_3D, 0, internalFormat,
                this->TextureSize[0],this->TextureSize[1],this->TextureSize[2], 0,
@@ -355,146 +469,158 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData)
 
   GL_CHECK_ERRORS
 
+
+  /// TODO Enable mipmapping later
   // Generate mipmaps
   //glGenerateMipmap(GL_TEXTURE_3D);
 
-  this->VolmeLoaded = true;
-  return this->VolmeLoaded;
+  /// Update volume build time
+  this->VolumeBuildTime.Modified();
+  return 1;
 }
 
-
-bool vtkSinglePassVolumeMapper::vtkInternal::IsVolmeLoaded()
-{
-  return this->VolmeLoaded;
-}
-
-
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::vtkInternal::IsInitialized
+/// \return
+///
 bool vtkSinglePassVolumeMapper::vtkInternal::IsInitialized()
 {
   return this->Initialized;
 }
 
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::vtkInternal::IsDataDirty
+/// \param input
+/// \return
+///
+bool vtkSinglePassVolumeMapper::vtkInternal::IsDataDirty(vtkImageData* input)
+{
+  /// Check if the scalars modified time is higher than the last build time
+  /// if yes, then mark the current referenced data as dirty.
+  if (input->GetMTime() > this->VolumeBuildTime.GetMTime())
+    {
+    return true;
+    }
 
+  return false;
+}
+
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::vtkInternal::HasBoundsChanged
+/// \param bounds
+/// \return
+///
+bool vtkSinglePassVolumeMapper::vtkInternal::HasBoundsChanged(double* bounds)
+{
+  /// TODO Detect if the camera is inside the bbox and if yes, update the bounds
+  /// accordingly so that we can zoom through it.
+  if (bounds[0] == this->Bounds[0] &&
+      bounds[1] == this->Bounds[1] &&
+      bounds[2] == this->Bounds[2] &&
+      bounds[3] == this->Bounds[3] &&
+      bounds[4] == this->Bounds[4] &&
+      bounds[5] == this->Bounds[5])
+    {
+    return false;
+    }
+  else
+    {
+    return true;
+    }
+}
+
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::vtkSinglePassVolumeMapper
+///
 vtkSinglePassVolumeMapper::vtkSinglePassVolumeMapper() : vtkVolumeMapper()
 {
   this->Implementation = new vtkInternal(this);
 }
 
-
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::~vtkSinglePassVolumeMapper
+///
 vtkSinglePassVolumeMapper::~vtkSinglePassVolumeMapper()
 {
   delete this->Implementation;
   this->Implementation = 0;
 }
 
-
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::PrintSelf
+/// \param os
+/// \param indent
+///
 void vtkSinglePassVolumeMapper::PrintSelf(ostream &os, vtkIndent indent)
 {
   // TODO Implement this method
 }
 
-
+//--------------------------------------------------------------------------
+///
+/// \brief vtkSinglePassVolumeMapper::Render
+/// \param ren
+/// \param vol
+///
 void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 {
-  vtkImageData* input = this->GetInput();
+  /// Make sure the context is current
+  ren->GetRenderWindow()->MakeCurrent();
 
+  vtkImageData* input = this->GetInput();
   glClear(GL_DEPTH_BUFFER_BIT);
   glClearColor(1.0, 1.0, 1.0, 1.0);
 
+  glEnable(GL_TEXTURE_1D);
+  glEnable(GL_TEXTURE_3D);
+
   if (!this->Implementation->IsInitialized())
     {
-    std::cerr << this->Implementation->IsInitialized() << std::endl;
-
-    GLenum err = glewInit();
-    if (GLEW_OK != err)	{
-        cerr<<"Error: "<<glewGetErrorString(err)<<endl;
-    } else {
-        if (GLEW_VERSION_3_3)
-        {
-            cout<<"Driver supports OpenGL 3.3\nDetails:"<<endl;
-        }
-    }
-    err = glGetError(); //this is to ignore INVALID ENUM error 1282
-    GL_CHECK_ERRORS
-
-    //output hardware information
-    cout<<"\tUsing GLEW "<< glewGetString(GLEW_VERSION)<<endl;
-    cout<<"\tVendor: "<< glGetString (GL_VENDOR)<<endl;
-    cout<<"\tRenderer: "<< glGetString (GL_RENDERER)<<endl;
-    cout<<"\tVersion: "<< glGetString (GL_VERSION)<<endl;
-    cout<<"\tGLSL: "<< glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
+    this->Implementation->Initialize();
     }
 
-  if (!this->Implementation->IsVolmeLoaded())
-    {
-    this->Implementation->LoadVolume(input);
-    this->Implementation->ComputeTransferFunction();
-    }
+  vtkDataArray* scalars = this->GetScalars(input,
+                          this->ScalarMode,
+                          this->ArrayAccessMode,
+                          this->ArrayId,
+                          this->ArrayName,
+                          this->Implementation->CellFlag);
 
+  scalars->GetRange(this->Implementation->ScalarsRange);
+
+  /// Local variables
   double bounds[6];
   vol->GetBounds(bounds);
 
-//  bounds[1] += 1;
-//  bounds[3] += 1;
-//  bounds[5] += 1;
-
-  std::cerr << "bounds "
-            << bounds[0] << " "
-            << bounds[1] << " "
-            << bounds[2] << " "
-            << bounds[3] << " "
-            << bounds[4] << " "
-            << bounds[5] << " " << std::endl;
-
-  if (!this->Implementation->IsInitialized())
+  /// Load volume data if needed
+  if (this->Implementation->IsDataDirty(input))
     {
-    // Load the raycasting shader
-    this->Implementation->shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
-    this->Implementation->shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
+    this->Implementation->LoadVolume(input, scalars);
+    }
 
-    // Compile and link the shader
-    this->Implementation->shader.CreateAndLinkProgram();
-    this->Implementation->shader.Use();
-        // Add attributes and uniforms
-        this->Implementation->shader.AddAttribute("in_vertex_pos");
-        this->Implementation->shader.AddUniform("modelview_matrix");
-        this->Implementation->shader.AddUniform("projection_matrix");
-        this->Implementation->shader.AddUniform("volume");
-        this->Implementation->shader.AddUniform("camera_pos");
-        this->Implementation->shader.AddUniform("step_size");
-        this->Implementation->shader.AddUniform("transfer_func");
-        this->Implementation->shader.AddUniform("vol_extents_min");
-        this->Implementation->shader.AddUniform("vol_extents_max");
+  /// Use the shader
+  this->Implementation->shader.Use();
 
-        // Pass constant uniforms at initialization
-        // Step should be dependant on the bounds and not on the texture size
-        // since we can have non uniform voxel size / spacing / aspect ratio
-        glUniform3f(this->Implementation->shader("step_size"),
-                    1.0f / (bounds[1] - bounds[0]),
-                    1.0f / (bounds[3] - bounds[2]),
-                    1.0f / (bounds[5] - bounds[4]));
-        glUniform1i(this->Implementation->shader("volume"), 0);
-        glUniform1i(this->Implementation->shader("transfer_func"), 1);
+  /// Update opacity transfer function
+  /// TODO Passing level 0 for now
+  this->Implementation->UpdateOpacityTransferFunction(vol,
+    scalars->GetNumberOfComponents(), 0);
 
-        // Bind textures
-        glEnable(GL_TEXTURE_3D);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_3D, this->Implementation->GetVolumeTexture());
+  /// Update transfer color functions
+  this->Implementation->UpdateColorTransferFunction(vol,
+    scalars->GetNumberOfComponents());
 
-        glEnable(GL_TEXTURE_1D);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_1D, this->Implementation->GetTransferFunctionSampler());
-    this->Implementation->shader.UnUse();
+  GL_CHECK_ERRORS
 
-    GL_CHECK_ERRORS
-
-    // Setup unit cube vertex array and vertex buffer objects
-    glGenVertexArrays(1, &this->Implementation->cubeVAOID);
-    glGenBuffers(1, &this->Implementation->cubeVBOID);
-    glGenBuffers(1, &this->Implementation->CubeIndicesID);
-    glGenBuffers(1, &this->Implementation->CubeTextureID);
-
-//    // Cube vertices
+  if (this->Implementation->HasBoundsChanged(bounds))
+    {
+    /// Cube vertices
     float vertices[8][3] =
       {
       {bounds[0], bounds[2], bounds[4]}, // 0
@@ -507,7 +633,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       {bounds[0], bounds[3], bounds[5]}  // 7
       };
 
-    // Cube indices
+    /// Cube indices
     GLushort cubeIndices[36]=
       {
       0,5,4, // bottom
@@ -526,14 +652,14 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
     glBindVertexArray(this->Implementation->cubeVAOID);
 
-    // pass cube vertices to buffer object memory
+    /// Pass cube vertices to buffer object memory
     glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->cubeVBOID);
     glBufferData (GL_ARRAY_BUFFER, sizeof(vertices), &(vertices[0][0]), GL_STATIC_DRAW);
 
     GL_CHECK_ERRORS
 
-    // Enable vertex attributre array for position
-    // and pass indices to element array  buffer
+    /// Enable vertex attributre array for position
+    /// and pass indices to element array  buffer
     glEnableVertexAttribArray(this->Implementation->shader["in_vertex_pos"]);
     glVertexAttribPointer(this->Implementation->shader["in_vertex_pos"], 3, GL_FLOAT, GL_FALSE, 0, 0);
 
@@ -543,32 +669,50 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     GL_CHECK_ERRORS
 
     glBindVertexArray(0);
-
-    //enable depth test
-    glEnable(GL_DEPTH_TEST);
-
-    //set the over blending function
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    cout<<"Initialization successfull"<<endl;
-
-    this->Implementation->Initialized = true;
     }
 
-  // Enable blending
-  glEnable(GL_BLEND);
+  /// Enable depth test
+  glEnable(GL_DEPTH_TEST);
 
-  // Use the shader
-  this->Implementation->shader.Use();
+  /// Set the over blending function
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  /// Enable blending
+  glEnable(GL_BLEND);
 
   GL_CHECK_ERRORS
 
-  // Pass shader uniforms
-  double* tmpPos = ren->GetActiveCamera()->GetPosition();
-  float pos[3] = {tmpPos[0], tmpPos[1], tmpPos[2]};
+  /// Update sampling distance
+  this->Implementation->SampleDistance[0] = 1.0 / (bounds[1] - bounds[0]);
+  this->Implementation->SampleDistance[1] = 1.0 / (bounds[3] - bounds[2]);
+  this->Implementation->SampleDistance[2] = 1.0 / (bounds[5] - bounds[4]);
 
-  std::cerr << "Camera position " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
+  /// Pass constant uniforms at initialization
+  /// Step should be dependant on the bounds and not on the texture size
+  /// since we can have non uniform voxel size / spacing / aspect ratio
+  glUniform3f(this->Implementation->shader("step_size"),
+              this->Implementation->SampleDistance[0],
+              this->Implementation->SampleDistance[1],
+              this->Implementation->SampleDistance[2]);
+  glUniform1i(this->Implementation->shader("volume"), 0);
+  glUniform1i(this->Implementation->shader("color_transfer_func"), 1);
+  glUniform1i(this->Implementation->shader("opacity_transfer_func"), 2);
 
-  // Look at the OpenGL Camera for the exact aspect computation
+  /// Bind textures
+  /// Volume texture is at unit 0
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_3D, this->Implementation->GetVolumeTexture());
+
+  /// Color texture is at unit 1
+  glActiveTexture(GL_TEXTURE1);
+  this->Implementation->RGBTable->Bind();
+
+  /// Opacity texture is at unit 2
+  /// TODO Supports only one table for now
+  glActiveTexture(GL_TEXTURE2);
+  this->Implementation->OpacityTables->GetTable(0)->Bind();
+
+  /// Look at the OpenGL Camera for the exact aspect computation
   double aspect[2];
   ren->ComputeAspect();
   ren->GetAspect(aspect);
@@ -576,8 +720,8 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   double clippingRange[2];
   ren->GetActiveCamera()->GetClippingRange(clippingRange);
 
-  // Will require transpose of this matrix for OpenGL
-  // Fix this
+  /// Will require transpose of this matrix for OpenGL
+  /// Fix this
   vtkMatrix4x4* projMat = ren->GetActiveCamera()->
     GetProjectionTransformMatrix(aspect[0]/aspect[1], 0, 1);
   float projectionMat[16];
@@ -589,8 +733,8 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       }
     }
 
-  // Will require transpose of this matrix for OpenGL
-  // Fix this
+  /// Will require transpose of this matrix for OpenGL
+  /// Fix this
   vtkMatrix4x4* mvMat = ren->GetActiveCamera()->GetViewTransformMatrix();
   float modelviewMat[16];
   for (int i = 0; i < 4; ++i)
@@ -601,22 +745,39 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       }
     }
 
-  glUniformMatrix4fv(this->Implementation->shader("projection_matrix"), 1, GL_FALSE, &(projectionMat[0]));
-  glUniformMatrix4fv(this->Implementation->shader("modelview_matrix"), 1, GL_FALSE, &(modelviewMat[0]));
+  glUniformMatrix4fv(this->Implementation->shader("projection_matrix"), 1,
+                     GL_FALSE, &(projectionMat[0]));
+  glUniformMatrix4fv(this->Implementation->shader("modelview_matrix"), 1,
+                     GL_FALSE, &(modelviewMat[0]));
+
+  /// We are using float for now
+  double* cameraPos = ren->GetActiveCamera()->GetPosition();
+  float pos[3] = {static_cast<float>(cameraPos[0]),
+                  static_cast<float>(cameraPos[1]),
+                  static_cast<float>(cameraPos[2])};
 
   glUniform3fv(this->Implementation->shader("camera_pos"), 1, &(pos[0]));
 
   float volExtentsMin[3] = {bounds[0], bounds[2], bounds[4]};
   float volExtentsMax[3] = {bounds[1], bounds[3], bounds[5]};
 
-  glUniform3fv(this->Implementation->shader("vol_extents_min"), 1, &(volExtentsMin[0]));
-  glUniform3fv(this->Implementation->shader("vol_extents_max"), 1, &(volExtentsMax[0]));
+  glUniform3fv(this->Implementation->shader("vol_extents_min"), 1,
+               &(volExtentsMin[0]));
+  glUniform3fv(this->Implementation->shader("vol_extents_max"), 1,
+               &(volExtentsMax[0]));
 
   glBindVertexArray(this->Implementation->cubeVAOID);
-
   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);
 
+  /// Undo binds and state changes
+  /// TODO Provide a stack implementation
   this->Implementation->shader.UnUse();
 
+  glBindVertexArray(0);
   glDisable(GL_BLEND);
+
+  glDisable(GL_TEXTURE_3D);
+  glDisable(GL_TEXTURE_1D);
+
+  glActiveTexture(GL_TEXTURE0);
 }
