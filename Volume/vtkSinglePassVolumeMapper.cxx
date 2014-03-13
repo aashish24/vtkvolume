@@ -344,14 +344,14 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
     switch(scalarType)
       {
       case VTK_FLOAT:
-        //          if(this->Supports_GL_ARB_texture_float)
-        //            {
-        //            internalFormat = vtkgl::INTENSITY16F_ARB;
-        //            }
-        //          else
-        //            {
-            internalFormat = GL_INTENSITY16;
-        //            }
+      if (glewIsSupported("GL_ARB_texture_float"))
+        {
+        internalFormat = vtkgl::INTENSITY16F_ARB;
+        }
+      else
+        {
+        internalFormat = GL_INTENSITY16;
+        }
         format = GL_RED;
         type = GL_FLOAT;
         shift=-ScalarsRange[0];
@@ -398,20 +398,8 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
       case VTK_UNSIGNED___INT64:
       case VTK_UNSIGNED_LONG:
       case VTK_UNSIGNED_LONG_LONG:
-      //          needTypeConversion = 1; // to float
-      //          if(this->Supports_GL_ARB_texture_float)
-      //            {
-      //            internalFormat = vtkgl::INTENSITY16F_ARB;
-      //            }
-      //          else
-      //            {
-      //            internalFormat = GL_INTENSITY16;
-      //            }
-      //          format = GL_RED;
-      //          type = GL_FLOAT;
-      //          shift=-this->ScalarsRange[0];
-      //          scale = 1/(this->ScalarsRange[1]-this->ScalarsRange[0]);
-      //          sliceArray = vtkFloatArray::New();
+        /// TODO Implement support for this
+        std::cerr << "Scalar type VTK_UNSIGNED_LONG_LONG not supported" << std::endl;
         break;
       case VTK_SHORT:
         internalFormat = GL_INTENSITY16;
@@ -437,7 +425,6 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
         internalFormat = GL_INTENSITY16;
         format = GL_RED;
         type = GL_UNSIGNED_INT;
-
         shift=-this->ScalarsRange[0]/VTK_UNSIGNED_INT_MAX;
         scale = VTK_UNSIGNED_INT_MAX/(this->ScalarsRange[1]-this->ScalarsRange[0]);
         break;
