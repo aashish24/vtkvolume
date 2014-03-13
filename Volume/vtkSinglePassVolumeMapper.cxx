@@ -4,12 +4,13 @@
 #include "vtkOpenGLOpacityTable.h"
 #include "vtkOpenGLVolumeRGBTable.h"
 
-#include <vtkObjectFactory.h>
+#include <vtkBoundingBox.h>
 #include <vtkCamera.h>
 #include <vtkColorTransferFunction.h>
 #include <vtkFloatArray.h>
 #include <vtkImageData.h>
 #include <vtkMatrix4x4.h>
+#include <vtkObjectFactory.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkRenderer.h>
