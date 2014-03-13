@@ -95,37 +95,37 @@ public:
     cout<<"\tGLSL: "<< glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
 
     /// Load the raycasting shader
-    this->shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
-    this->shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
+    this->Shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
+    this->Shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
 
     /// Compile and link the shader
-    this->shader.CreateAndLinkProgram();
-    this->shader.Use();
+    this->Shader.CreateAndLinkProgram();
+    this->Shader.Use();
 
     /// Add attributes and uniforms
-    this->shader.AddAttribute("in_vertex_pos");
-    this->shader.AddUniform("modelview_matrix");
-    this->shader.AddUniform("projection_matrix");
-    this->shader.AddUniform("volume");
-    this->shader.AddUniform("camera_pos");
-    this->shader.AddUniform("step_size");
-    this->shader.AddUniform("color_transfer_func");
-    this->shader.AddUniform("opacity_transfer_func");
-    this->shader.AddUniform("vol_extents_min");
-    this->shader.AddUniform("vol_extents_max");
+    this->Shader.AddAttribute("in_vertex_pos");
+    this->Shader.AddUniform("modelview_matrix");
+    this->Shader.AddUniform("projection_matrix");
+    this->Shader.AddUniform("volume");
+    this->Shader.AddUniform("camera_pos");
+    this->Shader.AddUniform("step_size");
+    this->Shader.AddUniform("color_transfer_func");
+    this->Shader.AddUniform("opacity_transfer_func");
+    this->Shader.AddUniform("vol_extents_min");
+    this->Shader.AddUniform("vol_extents_max");
 
     // Setup unit cube vertex array and vertex buffer objects
-    glGenVertexArrays(1, &this->cubeVAOID);
-    glGenBuffers(1, &this->cubeVBOID);
-    glGenBuffers(1, &this->CubeIndicesID);
-    glGenBuffers(1, &this->CubeTextureID);
+    glGenVertexArrays(1, &this->CubeVAOId);
+    glGenBuffers(1, &this->CubeVBOId);
+    glGenBuffers(1, &this->CubeIndicesId);
+    glGenBuffers(1, &this->CubeTextureId);
 
     this->RGBTable = new vtkOpenGLVolumeRGBTable();
 
     /// TODO Currently we are supporting only one level
     this->OpacityTables = new vtkOpenGLOpacityTables(1);
 
-    this->shader.UnUse();
+    this->Shader.UnUse();
 
     this->Initialized = true;
     }
@@ -267,12 +267,12 @@ public:
   bool Initialized;
   bool ValidTransferFunction;
 
-  GLuint cubeVBOID;
-  GLuint cubeVAOID;
-  GLuint CubeIndicesID;
-  GLuint CubeTextureID;
+  GLuint CubeVBOId;
+  GLuint CubeVAOId;
+  GLuint CubeIndicesId;
+  GLuint CubeTextureId;
 
-  GLSLShader shader;
+  GLSLShader Shader;
 
   GLuint TextureId;
   GLuint TransferFuncSampler;
@@ -593,7 +593,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     }
 
   /// Use the shader
-  this->Implementation->shader.Use();
+  this->Implementation->Shader.Use();
 
   /// Update opacity transfer function
   /// TODO Passing level 0 for now
@@ -638,20 +638,20 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       2,5,1  // back
       };
 
-    glBindVertexArray(this->Implementation->cubeVAOID);
+    glBindVertexArray(this->Implementation->CubeVAOId);
 
     /// Pass cube vertices to buffer object memory
-    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->cubeVBOID);
+    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->CubeVBOId);
     glBufferData (GL_ARRAY_BUFFER, sizeof(vertices), &(vertices[0][0]), GL_STATIC_DRAW);
 
     GL_CHECK_ERRORS
 
     /// Enable vertex attributre array for position
     /// and pass indices to element array  buffer
-    glEnableVertexAttribArray(this->Implementation->shader["in_vertex_pos"]);
-    glVertexAttribPointer(this->Implementation->shader["in_vertex_pos"], 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(this->Implementation->Shader["in_vertex_pos"]);
+    glVertexAttribPointer(this->Implementation->Shader["in_vertex_pos"], 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesID);
+    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesId);
     glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
 
     GL_CHECK_ERRORS
@@ -678,13 +678,13 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   /// Pass constant uniforms at initialization
   /// Step should be dependant on the bounds and not on the texture size
   /// since we can have non uniform voxel size / spacing / aspect ratio
-  glUniform3f(this->Implementation->shader("step_size"),
+  glUniform3f(this->Implementation->Shader("step_size"),
               this->Implementation->SampleDistance[0],
               this->Implementation->SampleDistance[1],
               this->Implementation->SampleDistance[2]);
-  glUniform1i(this->Implementation->shader("volume"), 0);
-  glUniform1i(this->Implementation->shader("color_transfer_func"), 1);
-  glUniform1i(this->Implementation->shader("opacity_transfer_func"), 2);
+  glUniform1i(this->Implementation->Shader("volume"), 0);
+  glUniform1i(this->Implementation->Shader("color_transfer_func"), 1);
+  glUniform1i(this->Implementation->Shader("opacity_transfer_func"), 2);
 
   /// Bind textures
   /// Volume texture is at unit 0
@@ -733,9 +733,9 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       }
     }
 
-  glUniformMatrix4fv(this->Implementation->shader("projection_matrix"), 1,
+  glUniformMatrix4fv(this->Implementation->Shader("projection_matrix"), 1,
                      GL_FALSE, &(projectionMat[0]));
-  glUniformMatrix4fv(this->Implementation->shader("modelview_matrix"), 1,
+  glUniformMatrix4fv(this->Implementation->Shader("modelview_matrix"), 1,
                      GL_FALSE, &(modelviewMat[0]));
 
   /// We are using float for now
@@ -744,22 +744,22 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
                   static_cast<float>(cameraPos[1]),
                   static_cast<float>(cameraPos[2])};
 
-  glUniform3fv(this->Implementation->shader("camera_pos"), 1, &(pos[0]));
+  glUniform3fv(this->Implementation->Shader("camera_pos"), 1, &(pos[0]));
 
   float volExtentsMin[3] = {bounds[0], bounds[2], bounds[4]};
   float volExtentsMax[3] = {bounds[1], bounds[3], bounds[5]};
 
-  glUniform3fv(this->Implementation->shader("vol_extents_min"), 1,
+  glUniform3fv(this->Implementation->Shader("vol_extents_min"), 1,
                &(volExtentsMin[0]));
-  glUniform3fv(this->Implementation->shader("vol_extents_max"), 1,
+  glUniform3fv(this->Implementation->Shader("vol_extents_max"), 1,
                &(volExtentsMax[0]));
 
-  glBindVertexArray(this->Implementation->cubeVAOID);
+  glBindVertexArray(this->Implementation->CubeVAOId);
   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);
 
   /// Undo binds and state changes
   /// TODO Provide a stack implementation
-  this->Implementation->shader.UnUse();
+  this->Implementation->Shader.UnUse();
 
   glBindVertexArray(0);
   glDisable(GL_BLEND);

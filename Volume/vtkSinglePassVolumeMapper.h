@@ -3,6 +3,10 @@
 
 #include <vtkVolumeMapper.h>
 
+//----------------------------------------------------------------------------
+///
+/// \brief The vtkSinglePassVolumeMapper class
+///
 class vtkSinglePassVolumeMapper : public vtkVolumeMapper
 {
   public:
