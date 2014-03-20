@@ -19,14 +19,25 @@ smooth in vec3 vertex_pos;
 /// Volume dataset
 uniform sampler3D	volume;
 
-/// Transfer function
-uniform sampler1D transfer_func;
+/// Transfer functions
+uniform sampler1D color_transfer_func;
+uniform sampler1D opacity_transfer_func;
 
 /// Camera position
 uniform vec3 camera_pos;
 
 /// Ray step size
 uniform vec3 step_size;
+
+/// Enable / disable shading
+uniform bool enable_shading;
+
+/// Material and lighting
+uniform vec3 diffuse;
+uniform vec3 ambient;
+uniform vec3 specular;
+uniform vec4 light_position;
+uniform float shininess;
 
 /// Constants
 ///
@@ -41,19 +52,100 @@ const vec3 texMin = vec3(0);
 /// Maximum texture access coordinate
 const vec3 texMax = vec3(1);
 
+/// Globals
+vec3 dataPos;
+
+const vec4 clampMin = vec4(0.0);
+const vec4 clampMax = vec4(1.0);
+
+/// Perform shading on the volume
+///
+///
+//////////////////////////////////////////////////////////////////////////////
+void shade()
+{
+  /// g1 - g2 is gradient in texture coordinates
+  vec3 g1;
+  vec3 g2;
+
+  g1.x = texture3D(volume, vec3 dataPos + step_size[0]).x;
+  g1.y = texture3D(volume, vec3 dataPos + step_size[1]).x;
+  g1.z = texture3D(volume, vec3 dataPos + step_size[2]).x;
+
+  g2.x = texture3D(volume, vec3 dataPos - step_size[0]).x;
+  g2.y = texture3D(volume, vec3 dataPos - step_size[1]).x;
+  g2.z = texture3D(volume, vec3 dataPos - step_size[2]).x;
+
+  g2 = g1 - g2;
+  g2 = g2 * cell_scale;
+
+  float normalLength = length(g2);
+  if(normalLength > 0.0) {
+    /// TODO Implement this
+    //g2 = normalize(transposeTextureToEye * g2);
+    g2 = normalize(g2);
+  } else {
+    g2 = vec3(0.0,0.0,0.0);
+  }
+
+  /// TODO Implement this
+  vec4 color = colorFromValue(value);
+
+  /// initialize color to 0.0
+  vec4 finalColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+  /// TODO Making assumption that light position is same as camera position
+  ///      Also, using directional light for now
+  light_position = vec4(camera_pos, 0.0);
+
+  /// Perform simple light calculations
+  float nDotL = dot(g2, ldir);
+  float nDotH = dot(g2, h);
+
+  /// Separate nDotL and nDotH for two-sided shading, otherwise we
+  /// get black spots.
+
+  /// Two-sided shading
+  if (nDotL < 0.0) {
+    nDotL =- nDotL;
+  }
+
+  /// Two-sided shading
+  if (nDotH < 0.0) {
+    nDotH =- nDotH;
+  }
+
+  /// Ambient term for this light
+  finalColor += ambient;
+
+  /// Diffuse term for this light
+  if(nDotL > 0.0) {
+    finalColor += diffuse * nDotL * color;
+  }
+
+  /// Specular term for this light
+  float shininessFactor = pow(nDotH, shininess);
+  finalColor += specular * shininessFactor;
+
+  /// clamp values otherwise we get black spots
+  finalColor = clamp(finalColor,clampMin,clampMax);
+
+  return finalColor;
+}
+
 /// Main
 ///
 //////////////////////////////////////////////////////////////////////////////
 void main()
 {
   /// Get the 3D texture coordinates for lookup into the volume dataset
-  vec3 dataPos = texture_coords.xyz;
+  dataPos = texture_coords.xyz;
 
   /// For now assume identity scene matrix
-  mat4 scene_matrix = mat4(1);
+  mat4 inv_model_matrix = mat4(1);
 
   /// Getting the ray marching direction (in object space);
-  vec3 geomDir = normalize(vertex_pos.xyz - vec4(scene_matrix * vec4(camera_pos, 1.0)).xyz);
+  vec3 geomDir = normalize(vertex_pos.xyz - vec4(inv_model_matrix * vec4(camera_pos, 1.0)).xyz);
 
   /// Multiply the raymarching direction with the step size to get the
   /// sub-step size we need to take at each raymarching step
@@ -78,7 +170,7 @@ void main()
     /// So to be within the dataset limits, the dot product will return a
     /// value less than 3. If it is greater than 3, we are already out of
     /// the volume dataset
-    stop = dot(sign(dataPos-texMin),sign(texMax-dataPos)) < 3.0;
+    stop = dot(sign(dataPos - texMin), sign(texMax - dataPos)) < 3.0;
 
     //if the stopping condition is true we brek out of the ray marching loop
     if (stop)
@@ -86,10 +178,8 @@ void main()
 
     /// Data fetching from the red channel of volume texture
     float scalar = texture(volume, dataPos).r;
-    vec4 src = texture(transfer_func, scalar);
-
-    /// Reduce the alpha to have a more transparent result
-    //src.a *= .05f;
+    vec4 src = vec4(texture(color_transfer_func, scalar).xyz,
+                    texture(opacity_transfer_func, scalar).w);
 
     /// Opacity calculation using compositing:
     /// here we use front to back compositing scheme whereby the current sample

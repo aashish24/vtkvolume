@@ -21,6 +21,9 @@ uniform vec3 camPos;
 /// Ray step size
 uniform vec3 step_size;
 
+/// Enable / disble shading
+uniform bool enable_shading;
+
 /// Constants
 ///
 //////////////////////////////////////////////////////////////////////////////

@@ -54,7 +54,8 @@ public:
     {
     this->TextureSize[0] = this->TextureSize[1] = this->TextureSize[2] = -1;
     this->SampleDistance[0] = this->SampleDistance[1] =
-      this->SampleDistance[2];
+      this->SampleDistance[2] = 0.0;
+    this->CellScale[0] = this->CellScale[1] = this->CellScale[2] = 0.0;
 
     // TODO Initialize extents and scalars range
     }
@@ -109,10 +110,12 @@ public:
     this->Shader.AddUniform("volume");
     this->Shader.AddUniform("camera_pos");
     this->Shader.AddUniform("step_size");
+    this->Shader.AddUniform("cell_scale");
     this->Shader.AddUniform("color_transfer_func");
     this->Shader.AddUniform("opacity_transfer_func");
     this->Shader.AddUniform("vol_extents_min");
     this->Shader.AddUniform("vol_extents_max");
+    this->Shader.AddUniform("enable_shading");
 
     // Setup unit cube vertex array and vertex buffer objects
     glGenVertexArrays(1, &this->CubeVAOId);
@@ -286,6 +289,7 @@ public:
   double ScalarsRange[2];
   double Bounds[6];
   double SampleDistance[3];
+  double CellScale[3];
 
   vtkSinglePassVolumeMapper* Parent;
   vtkOpenGLVolumeRGBTable* RGBTable;
@@ -675,6 +679,10 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   this->Implementation->SampleDistance[1] = 1.0 / (bounds[3] - bounds[2]);
   this->Implementation->SampleDistance[2] = 1.0 / (bounds[5] - bounds[4]);
 
+  this->Implementation->CellScale[0] = (bounds[1] - bounds[0]) * 0.5;
+  this->Implementation->CellScale[1] = (bounds[3] - bounds[2]) * 0.5;
+  this->Implementation->CellScale[2] = (bounds[5] - bounds[4]) * 0.5;
+
   /// Pass constant uniforms at initialization
   /// Step should be dependant on the bounds and not on the texture size
   /// since we can have non uniform voxel size / spacing / aspect ratio
@@ -682,9 +690,19 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
               this->Implementation->SampleDistance[0],
               this->Implementation->SampleDistance[1],
               this->Implementation->SampleDistance[2]);
+
+  glUniform3f(this->Implementation->Shader("cell_scale"),
+              this->Implementation->CellScale[0],
+              this->Implementation->CellScale[1],
+              this->Implementation->CellScale[2]);
+
   glUniform1i(this->Implementation->Shader("volume"), 0);
   glUniform1i(this->Implementation->Shader("color_transfer_func"), 1);
   glUniform1i(this->Implementation->Shader("opacity_transfer_func"), 2);
+
+  /// Shading is ON by default
+  /// TODO Add an API to enable / disable shading if not present
+  glUniform1i(this->Implementation->Shader("enable_shading"), 1);
 
   /// Bind textures
   /// Volume texture is at unit 0
