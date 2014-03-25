@@ -25,9 +25,14 @@ uniform sampler1D opacity_transfer_func;
 
 /// Camera position
 uniform vec3 camera_pos;
+uniform vec3 light_pos;
+
+/// view and model matrices
+uniform mat4 scene_matrix;
 
 /// Ray step size
 uniform vec3 step_size;
+uniform vec3 cell_scale;
 
 /// Enable / disable shading
 uniform bool enable_shading;
@@ -36,7 +41,6 @@ uniform bool enable_shading;
 uniform vec3 diffuse;
 uniform vec3 ambient;
 uniform vec3 specular;
-uniform vec4 light_position;
 uniform float shininess;
 
 /// Constants
@@ -55,52 +59,53 @@ const vec3 texMax = vec3(1);
 /// Globals
 vec3 dataPos;
 
-const vec4 clampMin = vec4(0.0);
-const vec4 clampMax = vec4(1.0);
+const vec3 clampMin = vec3(0.0);
+const vec3 clampMax = vec3(1.0);
+
+mat4 inv_scene_matrix;
+
+vec3 light_pos_obj;
 
 /// Perform shading on the volume
 ///
 ///
 //////////////////////////////////////////////////////////////////////////////
-void shade()
+vec3 shade()
 {
-  /// g1 - g2 is gradient in texture coordinates
+  /// g1 - g2 is gradient in object space
   vec3 g1;
   vec3 g2;
+  vec3 ldir = normalize(light_pos_obj - dataPos);
+  vec3 xvec = vec3(step_size[0], 0.0, 0.0);
+  vec3 yvec = vec3(0.0, step_size[1], 0.0);
+  vec3 zvec = vec3(0.0, 0.0, step_size[2]);
 
-  g1.x = texture3D(volume, vec3 dataPos + step_size[0]).x;
-  g1.y = texture3D(volume, vec3 dataPos + step_size[1]).x;
-  g1.z = texture3D(volume, vec3 dataPos + step_size[2]).x;
+  g1.x = texture(volume, vec3(dataPos + xvec)).x;
+  g1.y = texture(volume, vec3(dataPos + yvec)).x;
+  g1.z = texture(volume, vec3(dataPos + zvec)).x;
 
-  g2.x = texture3D(volume, vec3 dataPos - step_size[0]).x;
-  g2.y = texture3D(volume, vec3 dataPos - step_size[1]).x;
-  g2.z = texture3D(volume, vec3 dataPos - step_size[2]).x;
+  g2.x = texture(volume, vec3(dataPos - xvec)).x;
+  g2.y = texture(volume, vec3(dataPos - yvec)).x;
+  g2.z = texture(volume, vec3(dataPos - zvec)).x;
 
   g2 = g1 - g2;
   g2 = g2 * cell_scale;
 
   float normalLength = length(g2);
   if(normalLength > 0.0) {
-    /// TODO Implement this
-    //g2 = normalize(transposeTextureToEye * g2);
     g2 = normalize(g2);
   } else {
     g2 = vec3(0.0,0.0,0.0);
   }
 
-  /// TODO Implement this
-  vec4 color = colorFromValue(value);
-
-  /// initialize color to 0.0
-  vec4 finalColor = vec4(1.0, 1.0, 1.0, 1.0);
-
-  /// TODO Making assumption that light position is same as camera position
-  ///      Also, using directional light for now
-  light_position = vec4(camera_pos, 0.0);
+  /// Initialize color to 1.0
+  vec3 finalColor = vec3(0.0);
 
   /// Perform simple light calculations
   float nDotL = dot(g2, ldir);
-  float nDotH = dot(g2, h);
+
+  /// TODO Fix this
+  //float nDotH = dot(g2, h);
 
   /// Separate nDotL and nDotH for two-sided shading, otherwise we
   /// get black spots.
@@ -111,21 +116,19 @@ void shade()
   }
 
   /// Two-sided shading
-  if (nDotH < 0.0) {
-    nDotH =- nDotH;
-  }
+  //  if (nDotH < 0.0) {
+  //    nDotH =- nDotH;
+  //  }
 
   /// Ambient term for this light
   finalColor += ambient;
 
   /// Diffuse term for this light
-  if(nDotL > 0.0) {
-    finalColor += diffuse * nDotL * color;
-  }
+  finalColor += diffuse * nDotL;
 
   /// Specular term for this light
-  float shininessFactor = pow(nDotH, shininess);
-  finalColor += specular * shininessFactor;
+  //  float shininessFactor = pow(nDotH, shininess);
+  //  finalColor += specular * shininessFactor;
 
   /// clamp values otherwise we get black spots
   finalColor = clamp(finalColor,clampMin,clampMax);
@@ -141,11 +144,11 @@ void main()
   /// Get the 3D texture coordinates for lookup into the volume dataset
   dataPos = texture_coords.xyz;
 
-  /// For now assume identity scene matrix
-  mat4 inv_model_matrix = mat4(1);
+  /// inverse is available only on 120 or above
+  inv_scene_matrix = inverse(scene_matrix);
 
   /// Getting the ray marching direction (in object space);
-  vec3 geomDir = normalize(vertex_pos.xyz - vec4(inv_model_matrix * vec4(camera_pos, 1.0)).xyz);
+  vec3 geomDir = normalize(vertex_pos.xyz - vec4(inv_scene_matrix * vec4(camera_pos, 1.0)).xyz);
 
   /// Multiply the raymarching direction with the step size to get the
   /// sub-step size we need to take at each raymarching step
@@ -153,6 +156,9 @@ void main()
 
   /// Flag to indicate if the raymarch loop should terminate
   bool stop = false;
+
+  /// Light position in object space
+  light_pos_obj = (inv_scene_matrix *  vec4(light_pos, 1.0)).xyz;
 
   /// For all samples along the ray
   for (int i = 0; i < MAX_SAMPLES; i++) {
@@ -188,6 +194,10 @@ void main()
     /// Next, this alpha is multiplied with the current sample colour and accumulated
     /// to the composited colour. The alpha value from the previous steps is then
     /// accumulated to the composited colour alpha.
+    if (src.a > 0) {
+      src.rgb *= shade().rgb;
+    }
+
     src.rgb *= src.a;
     dst = (1.0f - dst.a) * src + dst;
 

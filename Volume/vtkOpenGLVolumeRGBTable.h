@@ -105,8 +105,8 @@ public:
           }
 
         scalarRGB->GetTable(range[0],range[1], this->TexutureWidth, this->Table);
-        glTexImage1D(GL_TEXTURE_1D,0,GL_RGB16, this->TexutureWidth, 0,
-                     GL_RGB,GL_FLOAT,this->Table);
+        glTexImage1D(GL_TEXTURE_1D, 0, GL_RGB16, this->TexutureWidth, 0,
+                     GL_RGB, GL_FLOAT, this->Table);
 
         this->Loaded = true;
         this->BuildTime.Modified();

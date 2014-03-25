@@ -105,10 +105,12 @@ public:
 
     /// Add attributes and uniforms
     this->Shader.AddAttribute("in_vertex_pos");
+    this->Shader.AddUniform("scene_matrix");
     this->Shader.AddUniform("modelview_matrix");
     this->Shader.AddUniform("projection_matrix");
     this->Shader.AddUniform("volume");
     this->Shader.AddUniform("camera_pos");
+    this->Shader.AddUniform("light_pos");
     this->Shader.AddUniform("step_size");
     this->Shader.AddUniform("cell_scale");
     this->Shader.AddUniform("color_transfer_func");
@@ -116,6 +118,10 @@ public:
     this->Shader.AddUniform("vol_extents_min");
     this->Shader.AddUniform("vol_extents_max");
     this->Shader.AddUniform("enable_shading");
+    this->Shader.AddUniform("ambient");
+    this->Shader.AddUniform("diffuse");
+    this->Shader.AddUniform("specular");
+    this->Shader.AddUniform("shininess");
 
     // Setup unit cube vertex array and vertex buffer objects
     glGenVertexArrays(1, &this->CubeVAOId);
@@ -165,8 +171,10 @@ public:
       vtkColorTransferFunction* colorTransferFunction =
         volumeProperty->GetRGBTransferFunction(0);
 
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.0, 0.0, 0.0);
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 1.0, 1.0, 1.0);
+      colorTransferFunction->AddRGBPoint((this->ScalarsRange[1] - this->ScalarsRange[0]) * 0.5 ,
+                                         1.0, 1.0, 0.0);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 0.0, 0.0, 1.0);
 
       /// Activate texture 1
       glActiveTexture(GL_TEXTURE1);
@@ -703,6 +711,13 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   /// Shading is ON by default
   /// TODO Add an API to enable / disable shading if not present
   glUniform1i(this->Implementation->Shader("enable_shading"), 1);
+  glUniform3f(this->Implementation->Shader("ambient"),
+              0.0, 0.0, 0.0);
+  glUniform3f(this->Implementation->Shader("diffuse"),
+              1.0, 1.0, 1.0);
+  glUniform3f(this->Implementation->Shader("specular"),
+              1.0, 1.0, 1.0);
+  glUniform1f(this->Implementation->Shader("shininess"),1.0);
 
   /// Bind textures
   /// Volume texture is at unit 0
@@ -751,10 +766,23 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
       }
     }
 
+  /// Scene matrix
+  float sceneMat[16];
+  vtkMatrix4x4* scMat = vol->GetMatrix();
+  for (int i = 0; i < 4; ++i)
+    {
+    for (int j = 0; j < 4; ++j)
+      {
+      sceneMat[i * 4 + j] = scMat->Element[i][j];
+      }
+    }
+
   glUniformMatrix4fv(this->Implementation->Shader("projection_matrix"), 1,
                      GL_FALSE, &(projectionMat[0]));
   glUniformMatrix4fv(this->Implementation->Shader("modelview_matrix"), 1,
                      GL_FALSE, &(modelviewMat[0]));
+  glUniformMatrix4fv(this->Implementation->Shader("scene_matrix"), 1,
+                     GL_FALSE, &(sceneMat[0]));
 
   /// We are using float for now
   double* cameraPos = ren->GetActiveCamera()->GetPosition();
@@ -763,6 +791,9 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
                   static_cast<float>(cameraPos[2])};
 
   glUniform3fv(this->Implementation->Shader("camera_pos"), 1, &(pos[0]));
+
+  /// NOTE Assuming that light is located on the camera
+  glUniform3fv(this->Implementation->Shader("light_pos"), 1, &(pos[0]));
 
   float volExtentsMin[3] = {bounds[0], bounds[2], bounds[4]};
   float volExtentsMax[3] = {bounds[1], bounds[3], bounds[5]};
