@@ -51,16 +51,16 @@ uniform float shininess;
 const int MAX_SAMPLES = 300;
 
 /// Minimum texture access coordinate
-const vec3 texMin = vec3(0);
+const vec3 tex_min = vec3(0);
 
 /// Maximum texture access coordinate
-const vec3 texMax = vec3(1);
+const vec3 tex_max = vec3(1);
 
 /// Globals
-vec3 dataPos;
+vec3 data_pos;
 
-const vec3 clampMin = vec3(0.0);
-const vec3 clampMax = vec3(1.0);
+const vec3 clamp_min = vec3(0.0);
+const vec3 clamp_max = vec3(1.0);
 
 mat4 inv_scene_matrix;
 
@@ -76,21 +76,21 @@ vec3 shade()
   /// g1 - g2 is gradient in object space
   vec3 g1;
   vec3 g2;
-  vec3 ldir = normalize(light_pos_obj - dataPos);
-  vec3 vdir = normalize(eye_pos_obj - dataPos);
+  vec3 ldir = normalize(light_pos_obj - vertex_pos);
+  vec3 vdir = normalize(eye_pos_obj - vertex_pos);
   vec3 h = normalize(ldir + vdir);
 
   vec3 xvec = vec3(step_size[0], 0.0, 0.0);
   vec3 yvec = vec3(0.0, step_size[1], 0.0);
   vec3 zvec = vec3(0.0, 0.0, step_size[2]);
 
-  g1.x = texture(volume, vec3(dataPos + xvec)).x;
-  g1.y = texture(volume, vec3(dataPos + yvec)).x;
-  g1.z = texture(volume, vec3(dataPos + zvec)).x;
+  g1.x = texture(volume, vec3(data_pos + xvec)).x;
+  g1.y = texture(volume, vec3(data_pos + yvec)).x;
+  g1.z = texture(volume, vec3(data_pos + zvec)).x;
 
-  g2.x = texture(volume, vec3(dataPos - xvec)).x;
-  g2.y = texture(volume, vec3(dataPos - yvec)).x;
-  g2.z = texture(volume, vec3(dataPos - zvec)).x;
+  g2.x = texture(volume, vec3(data_pos - xvec)).x;
+  g2.y = texture(volume, vec3(data_pos - yvec)).x;
+  g2.z = texture(volume, vec3(data_pos - zvec)).x;
 
   g2 = normalize(g1 - g2);
 
@@ -132,7 +132,7 @@ vec3 shade()
   finalColor += specular * shininessFactor;
 
   /// clamp values otherwise we get black spots
-  finalColor = clamp(finalColor,clampMin,clampMax);
+  finalColor = clamp(finalColor,clamp_min,clamp_max);
 
   return finalColor;
 }
@@ -143,7 +143,7 @@ vec3 shade()
 void main()
 {
   /// Get the 3D texture coordinates for lookup into the volume dataset
-  dataPos = texture_coords.xyz;
+  data_pos = texture_coords.xyz;
 
   /// inverse is available only on 120 or above
   inv_scene_matrix = inverse(scene_matrix);
@@ -152,11 +152,11 @@ void main()
   eye_pos_obj = (inv_scene_matrix * vec4(camera_pos, 1.0)).xyz;
 
   /// Getting the ray marching direction (in object space);
-  vec3 geomDir = normalize(vertex_pos.xyz - eye_pos_obj);
+  vec3 geom_dir = normalize(vertex_pos.xyz - eye_pos_obj);
 
   /// Multiply the raymarching direction with the step size to get the
   /// sub-step size we need to take at each raymarching step
-  vec3 dirStep = geomDir * step_size;
+  vec3 dir_step = geom_dir * step_size;
 
   /// Flag to indicate if the raymarch loop should terminate
   bool stop = false;
@@ -166,28 +166,28 @@ void main()
 
   /// For all samples along the ray
   for (int i = 0; i < MAX_SAMPLES; i++) {
-    /// Advance ray by dirstep
-    dataPos = dataPos + dirStep;
+    /// Advance ray by dir_step
+    data_pos = data_pos + dir_step;
 
-    /// The two constants texMin and texMax have a value of vec3(-1,-1,-1)
+    /// The two constants tex_min and tex_max have a value of vec3(-1,-1,-1)
     /// and vec3(1,1,1) respectively. To determine if the data value is
     /// outside the volume data, we use the sign function. The sign function
     /// return -1 if the value is less than 0, 0 if the value is equal to 0
     /// and 1 if value is greater than 0. Hence, the sign function for the
-    /// calculation (sign(dataPos-texMin) and sign (texMax-dataPos)) will
+    /// calculation (sign(data_pos-tex_min) and sign (tex_max-data_pos)) will
     /// give us vec3(1,1,1) at the possible minimum and maximum position.
     /// When we do a dot product between two vec3(1,1,1) we get the answer 3.
     /// So to be within the dataset limits, the dot product will return a
     /// value less than 3. If it is greater than 3, we are already out of
     /// the volume dataset
-    stop = dot(sign(dataPos - texMin), sign(texMax - dataPos)) < 3.0;
+    stop = dot(sign(data_pos - tex_min), sign(tex_max - data_pos)) < 3.0;
 
     //if the stopping condition is true we brek out of the ray marching loop
     if (stop)
       break;
 
     /// Data fetching from the red channel of volume texture
-    float scalar = texture(volume, dataPos).r;
+    float scalar = texture(volume, data_pos).r;
     vec4 src = vec4(texture(color_transfer_func, scalar).xyz,
                     texture(opacity_transfer_func, scalar).w);
 

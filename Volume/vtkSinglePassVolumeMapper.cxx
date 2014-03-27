@@ -222,7 +222,7 @@ public:
 
     /// TODO: Do a better job to create the default opacity map
     scalarOpacity->AddPoint(this->ScalarsRange[0], 0.0);
-    scalarOpacity->AddPoint(this->ScalarsRange[1], 1.0);
+    scalarOpacity->AddPoint(this->ScalarsRange[1], 0.5);
 
     /// Activate texture 2
     glActiveTexture(GL_TEXTURE2);
