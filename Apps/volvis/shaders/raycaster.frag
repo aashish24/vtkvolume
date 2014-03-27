@@ -92,14 +92,13 @@ vec3 shade()
   g2.y = texture(volume, vec3(dataPos - yvec)).x;
   g2.z = texture(volume, vec3(dataPos - zvec)).x;
 
-  g2 = g1 - g2;
-  g2 = g2 * cell_scale;
+  g2 = normalize(g1 - g2);
 
   float normalLength = length(g2);
   if(normalLength > 0.0) {
     g2 = normalize(g2);
   } else {
-    g2 = vec3(0.0,0.0,0.0);
+    g2 = vec3(0.0, 0.0, 0.0);
   }
 
   /// Initialize color to 1.0
