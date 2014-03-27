@@ -80,78 +80,39 @@ public:
     this->NoiseTextureData = 0;
     }
 
-  //--------------------------------------------------------------------------
   ///
   /// \brief Initialize
   ///
-  void Initialize()
-    {
-    GLenum err = glewInit();
-    if (GLEW_OK != err)	{
-        cerr <<"Error: "<< glewGetErrorString(err)<<endl;
-    } else {
-        if (GLEW_VERSION_3_3)
-        {
-            cout<<"Driver supports OpenGL 3.3\nDetails:"<<endl;
-        }
-    }
-    /// This is to ignore INVALID ENUM error 1282
-    err = glGetError();
-    GL_CHECK_ERRORS
+  void Initialize();
 
-    //output hardware information
-    cout<<"\tUsing GLEW "<< glewGetString(GLEW_VERSION)<<endl;
-    cout<<"\tVendor: "<< glGetString (GL_VENDOR)<<endl;
-    cout<<"\tRenderer: "<< glGetString (GL_RENDERER)<<endl;
-    cout<<"\tVersion: "<< glGetString (GL_VERSION)<<endl;
-    cout<<"\tGLSL: "<< glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
+  ///
+  /// \brief vtkSinglePassVolumeMapper::vtkInternal::LoadVolume
+  /// \param imageData
+  /// \param scalars
+  /// \return
+  ///
+  bool LoadVolume(vtkImageData* imageData, vtkDataArray* scalars);
 
-    /// Load the raycasting shader
-    this->Shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
-    this->Shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
+  ///
+  /// \brief IsDataDirty
+  /// \param imageData
+  /// \return
+  ///
+  bool IsDataDirty(vtkImageData* imageData);
 
-    /// Compile and link the shader
-    this->Shader.CreateAndLinkProgram();
-    this->Shader.Use();
+  ///
+  /// \brief IsInitialized
+  /// \return
+  ///
+  bool IsInitialized();
 
-    /// Add attributes and uniforms
-    this->Shader.AddAttribute("in_vertex_pos");
-    this->Shader.AddUniform("scene_matrix");
-    this->Shader.AddUniform("modelview_matrix");
-    this->Shader.AddUniform("projection_matrix");
-    this->Shader.AddUniform("volume");
-    this->Shader.AddUniform("camera_pos");
-    this->Shader.AddUniform("light_pos");
-    this->Shader.AddUniform("step_size");
-    this->Shader.AddUniform("cell_scale");
-    this->Shader.AddUniform("color_transfer_func");
-    this->Shader.AddUniform("opacity_transfer_func");
-    this->Shader.AddUniform("noise");
-    this->Shader.AddUniform("vol_extents_min");
-    this->Shader.AddUniform("vol_extents_max");
-    this->Shader.AddUniform("enable_shading");
-    this->Shader.AddUniform("ambient");
-    this->Shader.AddUniform("diffuse");
-    this->Shader.AddUniform("specular");
-    this->Shader.AddUniform("shininess");
+  ///
+  /// \brief vtkSinglePassVolumeMapper::vtkInternal::HasBoundsChanged
+  /// \param bounds
+  /// \return
+  ///
+  bool HasBoundsChanged(double* bounds);
 
-    // Setup unit cube vertex array and vertex buffer objects
-    glGenVertexArrays(1, &this->CubeVAOId);
-    glGenBuffers(1, &this->CubeVBOId);
-    glGenBuffers(1, &this->CubeIndicesId);
-
-    this->RGBTable = new vtkOpenGLVolumeRGBTable();
-
-    /// TODO Currently we are supporting only one level
-    this->OpacityTables = new vtkOpenGLOpacityTables(1);
-
-    this->Shader.UnUse();
-
-    this->Initialized = true;
-    }
-
-
-  //--------------------------------------------------------------------------
   ///
   /// \brief UpdateColorTransferFunction
   /// \param vol
@@ -162,179 +123,21 @@ public:
   /// scalar components.
   ///
   /// TODO Deal with numberOfScalarComponents > 1
-  int UpdateColorTransferFunction(vtkVolume* vol, int numberOfScalarComponents)
-  {
-    /// Build the colormap in a 1D texture.
-    /// 1D RGB-texture=mapping from scalar values to color values
-    /// build the table.
-    if(numberOfScalarComponents == 1)
-      {
-      vtkVolumeProperty* volumeProperty = vol->GetProperty();
-      vtkColorTransferFunction* colorTransferFunction =
-        volumeProperty->GetRGBTransferFunction(0);
+  int UpdateColorTransferFunction(vtkVolume* vol, int numberOfScalarComponents);
 
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.5, 0.5, 0.5);
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
-
-      /// Activate texture 1
-      glActiveTexture(GL_TEXTURE1);
-
-      this->RGBTable->Update(
-        colorTransferFunction, this->ScalarsRange,
-        volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
-
-      glActiveTexture(GL_TEXTURE0);
-      }
-    else
-      {
-      std::cerr << "SinglePass volume mapper does not handle multi-component scalars";
-      return 1;
-      }
-
-    return 0;
-  }
-
-  //--------------------------------------------------------------------------
   ///
-  /// \brief vtkOpenGLGPUVolumeRayCastMapper::UpdateOpacityTransferFunction
+  /// \brief UpdateOpacityTransferFunction
   /// \param vol
   /// \param numberOfScalarComponents (1 or 4)
   /// \param level
   /// \return 0 or 1 (fail)
   ///
   int UpdateOpacityTransferFunction(vtkVolume* vol, int numberOfScalarComponents,
-                                    unsigned int level)
-  {
-    if (!vol)
-      {
-      std::cerr << "Invalid volume" << std::endl;
-      return 1;
-      }
-
-    if (numberOfScalarComponents != 1)
-      {
-      std::cerr << "SinglePass volume mapper does not handle multi-component scalars";
-      return 1;
-      }
-
-    vtkVolumeProperty* volumeProperty = vol->GetProperty();
-    vtkPiecewiseFunction* scalarOpacity = volumeProperty->GetScalarOpacity();
-
-    /// TODO: Do a better job to create the default opacity map
-    scalarOpacity->AddPoint(this->ScalarsRange[0], 0.0);
-    scalarOpacity->AddPoint(this->ScalarsRange[1], 0.5);
-
-    /// Activate texture 2
-    glActiveTexture(GL_TEXTURE2);
-
-    this->OpacityTables->GetTable(level)->Update(
-      scalarOpacity,this->BlendMode,
-      this->SampleDistance,
-      this->ScalarsRange,
-      volumeProperty->GetScalarOpacityUnitDistance(0),
-      volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
-
-    /// Restore default active texture
-    glActiveTexture(GL_TEXTURE0);
-
-    return 0;
-  }
-
-  //--------------------------------------------------------------------------
+                                    unsigned int level);
   ///
-  /// \brief vtkOpenGLGPUVolumeRayCastMapper::UpdateNoiseTexture
+  /// \brief UpdateNoiseTexture
   ///
-  void UpdateNoiseTexture()
-  {
-    if (this->NoiseTextureData == 0)
-      {
-      glGenTextures(1, &this->NoiseTextureId);
-
-      glActiveTexture(GL_TEXTURE3);
-      glBindTexture(GL_TEXTURE_2D, this->NoiseTextureId);
-
-      GLsizei size = 128;
-      GLint maxSize;
-      const float factor = 0.1f;
-      const float amplitude = 0.5f * factor;
-
-      glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxSize);
-      if (size > maxSize)
-        {
-        size=maxSize;
-        }
-
-      if (this->NoiseTextureData != 0 && this->NoiseTextureSize != size)
-        {
-        delete[] this->NoiseTextureData;
-        this->NoiseTextureData = 0;
-        }
-
-      if (this->NoiseTextureData == 0)
-        {
-        this->NoiseTextureData = new float[size * size];
-        this->NoiseTextureSize = size;
-        vtkNew<vtkPerlinNoise> noiseGenerator;
-        noiseGenerator->SetFrequency(size, 1.0, 1.0);
-        noiseGenerator->SetPhase(0.0, 0.0, 0.0);
-        noiseGenerator->SetAmplitude(amplitude);
-        int j = 0;
-        while(j < size)
-          {
-          int i = 0;
-          while(i < size)
-            {
-            this->NoiseTextureData[j * size + i] =
-              amplitude + static_cast<float>(noiseGenerator->EvaluateFunction(i, j, 0.0));
-            ++i;
-            }
-          ++j;
-          }
-        }
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, size, size, 0,
-                   GL_RED, GL_FLOAT, this->NoiseTextureData);
-
-      GLfloat borderColor[4]={0.0, 0.0, 0.0, 0.0};
-      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-      glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-      glActiveTexture(GL_TEXTURE0);
-      }
-  }
-
-  //--------------------------------------------------------------------------
-  ///
-  /// \brief LoadVolume
-  /// \param imageData
-  /// \param scalars
-  /// \return
-  ///
-  bool LoadVolume(vtkImageData* imageData, vtkDataArray* scalars);
-
-  //--------------------------------------------------------------------------
-  ///
-  /// \brief IsDataDirty
-  /// \param imageData
-  /// \return
-  ///
-  bool IsDataDirty(vtkImageData* imageData);
-
-  //--------------------------------------------------------------------------
-  ///
-  /// \brief IsInitialized
-  /// \return
-  ///
-  bool IsInitialized();
-
-  //--------------------------------------------------------------------------
-  ///
-  /// \brief HasBoundsChanged
-  /// \param bounds
-  /// \return
-  ///
-  bool HasBoundsChanged(double* bounds);
+  void UpdateNoiseTexture();
 
   ///
   /// Private member variables
@@ -374,12 +177,73 @@ public:
 };
 
 //--------------------------------------------------------------------------
-///
-/// \brief vtkSinglePassVolumeMapper::vtkInternal::LoadVolume
-/// \param imageData
-/// \param scalars
-/// \return
-///
+void vtkSinglePassVolumeMapper::vtkInternal::Initialize()
+{
+  GLenum err = glewInit();
+  if (GLEW_OK != err)	{
+      cerr <<"Error: "<< glewGetErrorString(err)<<endl;
+  } else {
+      if (GLEW_VERSION_3_3)
+      {
+          cout<<"Driver supports OpenGL 3.3\nDetails:"<<endl;
+      }
+  }
+  /// This is to ignore INVALID ENUM error 1282
+  err = glGetError();
+  GL_CHECK_ERRORS
+
+  //output hardware information
+  cout<<"\tUsing GLEW "<< glewGetString(GLEW_VERSION)<<endl;
+  cout<<"\tVendor: "<< glGetString (GL_VENDOR)<<endl;
+  cout<<"\tRenderer: "<< glGetString (GL_RENDERER)<<endl;
+  cout<<"\tVersion: "<< glGetString (GL_VERSION)<<endl;
+  cout<<"\tGLSL: "<< glGetString (GL_SHADING_LANGUAGE_VERSION)<<endl;
+
+  /// Load the raycasting shader
+  this->Shader.LoadFromFile(GL_VERTEX_SHADER, "shaders/raycaster.vert");
+  this->Shader.LoadFromFile(GL_FRAGMENT_SHADER, "shaders/raycaster.frag");
+
+  /// Compile and link the shader
+  this->Shader.CreateAndLinkProgram();
+  this->Shader.Use();
+
+  /// Add attributes and uniforms
+  this->Shader.AddAttribute("in_vertex_pos");
+  this->Shader.AddUniform("scene_matrix");
+  this->Shader.AddUniform("modelview_matrix");
+  this->Shader.AddUniform("projection_matrix");
+  this->Shader.AddUniform("volume");
+  this->Shader.AddUniform("camera_pos");
+  this->Shader.AddUniform("light_pos");
+  this->Shader.AddUniform("step_size");
+  this->Shader.AddUniform("cell_scale");
+  this->Shader.AddUniform("color_transfer_func");
+  this->Shader.AddUniform("opacity_transfer_func");
+  this->Shader.AddUniform("noise");
+  this->Shader.AddUniform("vol_extents_min");
+  this->Shader.AddUniform("vol_extents_max");
+  this->Shader.AddUniform("enable_shading");
+  this->Shader.AddUniform("ambient");
+  this->Shader.AddUniform("diffuse");
+  this->Shader.AddUniform("specular");
+  this->Shader.AddUniform("shininess");
+
+  // Setup unit cube vertex array and vertex buffer objects
+  glGenVertexArrays(1, &this->CubeVAOId);
+  glGenBuffers(1, &this->CubeVBOId);
+  glGenBuffers(1, &this->CubeIndicesId);
+
+  this->RGBTable = new vtkOpenGLVolumeRGBTable();
+
+  /// TODO Currently we are supporting only one level
+  this->OpacityTables = new vtkOpenGLOpacityTables(1);
+
+  this->Shader.UnUse();
+
+  this->Initialized = true;
+}
+
+//--------------------------------------------------------------------------
 bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
                                                         vtkDataArray* scalars)
 {
@@ -575,11 +439,6 @@ bool vtkSinglePassVolumeMapper::vtkInternal::IsDataDirty(vtkImageData* input)
 }
 
 //--------------------------------------------------------------------------
-///
-/// \brief vtkSinglePassVolumeMapper::vtkInternal::HasBoundsChanged
-/// \param bounds
-/// \return
-///
 bool vtkSinglePassVolumeMapper::vtkInternal::HasBoundsChanged(double* bounds)
 {
   /// TODO Detect if the camera is inside the bbox and if yes, update the bounds
@@ -596,6 +455,140 @@ bool vtkSinglePassVolumeMapper::vtkInternal::HasBoundsChanged(double* bounds)
   else
     {
     return true;
+    }
+}
+
+//--------------------------------------------------------------------------
+int vtkSinglePassVolumeMapper::vtkInternal::UpdateColorTransferFunction(
+  vtkVolume* vol, int numberOfScalarComponents)
+{
+  /// Build the colormap in a 1D texture.
+  /// 1D RGB-texture=mapping from scalar values to color values
+  /// build the table.
+  if(numberOfScalarComponents == 1)
+    {
+    vtkVolumeProperty* volumeProperty = vol->GetProperty();
+    vtkColorTransferFunction* colorTransferFunction =
+      volumeProperty->GetRGBTransferFunction(0);
+
+    colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.5, 0.5, 0.5);
+    colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
+
+    /// Activate texture 1
+    glActiveTexture(GL_TEXTURE1);
+
+    this->RGBTable->Update(
+      colorTransferFunction, this->ScalarsRange,
+      volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
+
+    glActiveTexture(GL_TEXTURE0);
+    }
+  else
+    {
+    std::cerr << "SinglePass volume mapper does not handle multi-component scalars";
+    return 1;
+    }
+
+  return 0;
+}
+
+//--------------------------------------------------------------------------
+int vtkSinglePassVolumeMapper::vtkInternal::UpdateOpacityTransferFunction(
+  vtkVolume* vol, int numberOfScalarComponents, unsigned int level)
+{
+  if (!vol)
+    {
+    std::cerr << "Invalid volume" << std::endl;
+    return 1;
+    }
+
+  if (numberOfScalarComponents != 1)
+    {
+    std::cerr << "SinglePass volume mapper does not handle multi-component scalars";
+    return 1;
+    }
+
+  vtkVolumeProperty* volumeProperty = vol->GetProperty();
+  vtkPiecewiseFunction* scalarOpacity = volumeProperty->GetScalarOpacity();
+
+  /// TODO: Do a better job to create the default opacity map
+  scalarOpacity->AddPoint(this->ScalarsRange[0], 0.0);
+  scalarOpacity->AddPoint(this->ScalarsRange[1], 0.5);
+
+  /// Activate texture 2
+  glActiveTexture(GL_TEXTURE2);
+
+  this->OpacityTables->GetTable(level)->Update(
+    scalarOpacity,this->BlendMode,
+    this->SampleDistance,
+    this->ScalarsRange,
+    volumeProperty->GetScalarOpacityUnitDistance(0),
+    volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
+
+  /// Restore default active texture
+  glActiveTexture(GL_TEXTURE0);
+
+  return 0;
+}
+
+//--------------------------------------------------------------------------
+void vtkSinglePassVolumeMapper::vtkInternal::UpdateNoiseTexture()
+{
+  if (this->NoiseTextureData == 0)
+    {
+    glGenTextures(1, &this->NoiseTextureId);
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, this->NoiseTextureId);
+
+    GLsizei size = 128;
+    GLint maxSize;
+    const float factor = 0.1f;
+    const float amplitude = 0.5f * factor;
+
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxSize);
+    if (size > maxSize)
+      {
+      size=maxSize;
+      }
+
+    if (this->NoiseTextureData != 0 && this->NoiseTextureSize != size)
+      {
+      delete[] this->NoiseTextureData;
+      this->NoiseTextureData = 0;
+      }
+
+    if (this->NoiseTextureData == 0)
+      {
+      this->NoiseTextureData = new float[size * size];
+      this->NoiseTextureSize = size;
+      vtkNew<vtkPerlinNoise> noiseGenerator;
+      noiseGenerator->SetFrequency(size, 1.0, 1.0);
+      noiseGenerator->SetPhase(0.0, 0.0, 0.0);
+      noiseGenerator->SetAmplitude(amplitude);
+      int j = 0;
+      while(j < size)
+        {
+        int i = 0;
+        while(i < size)
+          {
+          this->NoiseTextureData[j * size + i] =
+            amplitude + static_cast<float>(noiseGenerator->EvaluateFunction(i, j, 0.0));
+          ++i;
+          }
+        ++j;
+        }
+      }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, size, size, 0,
+                 GL_RED, GL_FLOAT, this->NoiseTextureData);
+
+    GLfloat borderColor[4]={0.0, 0.0, 0.0, 0.0};
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glActiveTexture(GL_TEXTURE0);
     }
 }
 
