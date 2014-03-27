@@ -202,8 +202,8 @@ void main()
     /// Next, this alpha is multiplied with the current sample colour and accumulated
     /// to the composited colour. The alpha value from the previous steps is then
     /// accumulated to the composited colour alpha.
-    if (src.a > 0 && enable_shading) {
-      src.rgb *= shade().rgb;
+    if (src.a > 0.01 && enable_shading) {
+      src.rgb += shade().rgb;
     }
 
     src.rgb *= src.a;

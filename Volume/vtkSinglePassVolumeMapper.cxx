@@ -471,8 +471,8 @@ int vtkSinglePassVolumeMapper::vtkInternal::UpdateColorTransferFunction(
     vtkColorTransferFunction* colorTransferFunction =
       volumeProperty->GetRGBTransferFunction(0);
 
-    colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.5, 0.5, 0.5);
-    colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
+    colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.0, 0.0, 0.0);
+    colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 0.2, 0.2, 0.2);
 
     /// Activate texture 1
     glActiveTexture(GL_TEXTURE1);
