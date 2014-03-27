@@ -65,6 +65,7 @@ const vec3 clampMax = vec3(1.0);
 mat4 inv_scene_matrix;
 
 vec3 light_pos_obj;
+vec3 eye_pos_obj;
 
 /// Perform shading on the volume
 ///
@@ -76,6 +77,9 @@ vec3 shade()
   vec3 g1;
   vec3 g2;
   vec3 ldir = normalize(light_pos_obj - dataPos);
+  vec3 vdir = normalize(eye_pos_obj - dataPos);
+  vec3 h = normalize(ldir + vdir);
+
   vec3 xvec = vec3(step_size[0], 0.0, 0.0);
   vec3 yvec = vec3(0.0, step_size[1], 0.0);
   vec3 zvec = vec3(0.0, 0.0, step_size[2]);
@@ -103,9 +107,7 @@ vec3 shade()
 
   /// Perform simple light calculations
   float nDotL = dot(g2, ldir);
-
-  /// TODO Fix this
-  //float nDotH = dot(g2, h);
+  float nDotH = dot(g2, h);
 
   /// Separate nDotL and nDotH for two-sided shading, otherwise we
   /// get black spots.
@@ -116,9 +118,9 @@ vec3 shade()
   }
 
   /// Two-sided shading
-  //  if (nDotH < 0.0) {
-  //    nDotH =- nDotH;
-  //  }
+    if (nDotH < 0.0) {
+      nDotH =- nDotH;
+    }
 
   /// Ambient term for this light
   finalColor += ambient;
@@ -127,8 +129,8 @@ vec3 shade()
   finalColor += diffuse * nDotL;
 
   /// Specular term for this light
-  //  float shininessFactor = pow(nDotH, shininess);
-  //  finalColor += specular * shininessFactor;
+  float shininessFactor = pow(nDotH, shininess);
+  finalColor += specular * shininessFactor;
 
   /// clamp values otherwise we get black spots
   finalColor = clamp(finalColor,clampMin,clampMax);
@@ -147,8 +149,11 @@ void main()
   /// inverse is available only on 120 or above
   inv_scene_matrix = inverse(scene_matrix);
 
+  /// Eye position in object space
+  eye_pos_obj = (inv_scene_matrix * vec4(camera_pos, 1.0)).xyz;
+
   /// Getting the ray marching direction (in object space);
-  vec3 geomDir = normalize(vertex_pos.xyz - vec4(inv_scene_matrix * vec4(camera_pos, 1.0)).xyz);
+  vec3 geomDir = normalize(vertex_pos.xyz - eye_pos_obj);
 
   /// Multiply the raymarching direction with the step size to get the
   /// sub-step size we need to take at each raymarching step

@@ -717,7 +717,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
               1.0, 1.0, 1.0);
   glUniform3f(this->Implementation->Shader("specular"),
               1.0, 1.0, 1.0);
-  glUniform1f(this->Implementation->Shader("shininess"),1.0);
+  glUniform1f(this->Implementation->Shader("shininess"), 10.0);
 
   /// Bind textures
   /// Volume texture is at unit 0
