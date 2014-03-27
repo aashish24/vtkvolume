@@ -29,7 +29,6 @@ vtkStandardNewMacro(vtkSinglePassVolumeMapper);
 /// TODO Remove this afterwards
 #define GL_CHECK_ERRORS \
   {\
-  std::cerr << "Checking for error " << glGetError() << std::endl; \
   assert(glGetError()== GL_NO_ERROR); \
   }
 
