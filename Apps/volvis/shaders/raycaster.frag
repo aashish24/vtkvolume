@@ -23,6 +23,8 @@ uniform sampler3D	volume;
 uniform sampler1D color_transfer_func;
 uniform sampler1D opacity_transfer_func;
 
+uniform sampler2D noise;
+
 /// Camera position
 uniform vec3 camera_pos;
 uniform vec3 light_pos;
@@ -164,10 +166,12 @@ void main()
   /// Light position in object space
   light_pos_obj = (inv_scene_matrix *  vec4(light_pos, 1.0)).xyz;
 
+  data_pos += dir_step * texture(noise, data_pos.xy).x;
+
   /// For all samples along the ray
   for (int i = 0; i < MAX_SAMPLES; i++) {
     /// Advance ray by dir_step
-    data_pos = data_pos + dir_step;
+    data_pos += dir_step;
 
     /// The two constants tex_min and tex_max have a value of vec3(-1,-1,-1)
     /// and vec3(1,1,1) respectively. To determine if the data value is
@@ -198,7 +202,7 @@ void main()
     /// Next, this alpha is multiplied with the current sample colour and accumulated
     /// to the composited colour. The alpha value from the previous steps is then
     /// accumulated to the composited colour alpha.
-    if (src.a > 0) {
+    if (src.a > 0 && enable_shading) {
       src.rgb *= shade().rgb;
     }
 

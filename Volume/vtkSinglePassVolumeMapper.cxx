@@ -10,7 +10,9 @@
 #include <vtkFloatArray.h>
 #include <vtkImageData.h>
 #include <vtkMatrix4x4.h>
+#include <vtkNew.h>
 #include <vtkObjectFactory.h>
+#include <vtkPerlinNoise.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkRenderer.h>
@@ -46,6 +48,12 @@ public:
   vtkInternal(vtkSinglePassVolumeMapper* parent) :
     Initialized(false),
     ValidTransferFunction(false),
+    CubeVBOId(0),
+    CubeVAOId(0),
+    CubeIndicesId(0),
+    VolumeTextureId(0),
+    TransferFuncId(0),
+    NoiseTextureId(0),
     CellFlag(-1),
     TextureWidth(1024),
     Parent(parent),
@@ -55,6 +63,7 @@ public:
     this->SampleDistance[0] = this->SampleDistance[1] =
       this->SampleDistance[2] = 0.0;
     this->CellScale[0] = this->CellScale[1] = this->CellScale[2] = 0.0;
+    this->NoiseTextureData = 0;
 
     // TODO Initialize extents and scalars range
     }
@@ -66,6 +75,9 @@ public:
 
     delete this->OpacityTables;
     this->OpacityTables = 0;
+
+    delete this->NoiseTextureData;
+    this->NoiseTextureData = 0;
     }
 
   //--------------------------------------------------------------------------
@@ -114,6 +126,7 @@ public:
     this->Shader.AddUniform("cell_scale");
     this->Shader.AddUniform("color_transfer_func");
     this->Shader.AddUniform("opacity_transfer_func");
+    this->Shader.AddUniform("noise");
     this->Shader.AddUniform("vol_extents_min");
     this->Shader.AddUniform("vol_extents_max");
     this->Shader.AddUniform("enable_shading");
@@ -126,7 +139,6 @@ public:
     glGenVertexArrays(1, &this->CubeVAOId);
     glGenBuffers(1, &this->CubeVBOId);
     glGenBuffers(1, &this->CubeIndicesId);
-    glGenBuffers(1, &this->CubeTextureId);
 
     this->RGBTable = new vtkOpenGLVolumeRGBTable();
 
@@ -138,15 +150,6 @@ public:
     this->Initialized = true;
     }
 
-  //--------------------------------------------------------------------------
-  ///
-  /// \brief GetVolumeTexture
-  /// \return Volume texture ID
-  ///
-  unsigned int GetVolumeTexture()
-    {
-    return this->TextureId;
-    }
 
   //--------------------------------------------------------------------------
   ///
@@ -170,10 +173,8 @@ public:
       vtkColorTransferFunction* colorTransferFunction =
         volumeProperty->GetRGBTransferFunction(0);
 
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 1.0, 1.0, 1.0);
-      colorTransferFunction->AddRGBPoint((this->ScalarsRange[1] - this->ScalarsRange[0]) * 0.5 ,
-                                         1.0, 1.0, 0.0);
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 0.0, 0.0, 1.0);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.5, 0.5, 0.5);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
 
       /// Activate texture 1
       glActiveTexture(GL_TEXTURE1);
@@ -241,6 +242,70 @@ public:
 
   //--------------------------------------------------------------------------
   ///
+  /// \brief vtkOpenGLGPUVolumeRayCastMapper::UpdateNoiseTexture
+  ///
+  void UpdateNoiseTexture()
+  {
+    if (this->NoiseTextureData == 0)
+      {
+      glGenTextures(1, &this->NoiseTextureId);
+
+      glActiveTexture(GL_TEXTURE3);
+      glBindTexture(GL_TEXTURE_2D, this->NoiseTextureId);
+
+      GLsizei size = 128;
+      GLint maxSize;
+      const float factor = 0.1f;
+      const float amplitude = 0.5f * factor;
+
+      glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxSize);
+      if (size > maxSize)
+        {
+        size=maxSize;
+        }
+
+      if (this->NoiseTextureData != 0 && this->NoiseTextureSize != size)
+        {
+        delete[] this->NoiseTextureData;
+        this->NoiseTextureData = 0;
+        }
+
+      if (this->NoiseTextureData == 0)
+        {
+        this->NoiseTextureData = new float[size * size];
+        this->NoiseTextureSize = size;
+        vtkNew<vtkPerlinNoise> noiseGenerator;
+        noiseGenerator->SetFrequency(size, 1.0, 1.0);
+        noiseGenerator->SetPhase(0.0, 0.0, 0.0);
+        noiseGenerator->SetAmplitude(amplitude);
+        int j = 0;
+        while(j < size)
+          {
+          int i = 0;
+          while(i < size)
+            {
+            this->NoiseTextureData[j * size + i] =
+              amplitude + static_cast<float>(noiseGenerator->EvaluateFunction(i, j, 0.0));
+            ++i;
+            }
+          ++j;
+          }
+        }
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, size, size, 0,
+                   GL_RED, GL_FLOAT, this->NoiseTextureData);
+
+      GLfloat borderColor[4]={0.0, 0.0, 0.0, 0.0};
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+      glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glActiveTexture(GL_TEXTURE0);
+      }
+  }
+
+  //--------------------------------------------------------------------------
+  ///
   /// \brief LoadVolume
   /// \param imageData
   /// \param scalars
@@ -280,12 +345,12 @@ public:
   GLuint CubeVBOId;
   GLuint CubeVAOId;
   GLuint CubeIndicesId;
-  GLuint CubeTextureId;
+
+  GLuint VolumeTextureId;
+  GLuint TransferFuncId;
+  GLuint NoiseTextureId;
 
   GLSLShader Shader;
-
-  GLuint TextureId;
-  GLuint TransferFuncSampler;
 
   int CellFlag;
   int TextureSize[3];
@@ -297,6 +362,9 @@ public:
   double Bounds[6];
   double SampleDistance[3];
   double CellScale[3];
+
+  float* NoiseTextureData;
+  GLint NoiseTextureSize;
 
   vtkSinglePassVolumeMapper* Parent;
   vtkOpenGLVolumeRGBTable* RGBTable;
@@ -317,8 +385,8 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
 {
   /// Generate OpenGL texture
   glEnable(GL_TEXTURE_3D);
-  glGenTextures(1, &this->TextureId);
-  glBindTexture(GL_TEXTURE_3D, this->TextureId);
+  glGenTextures(1, &this->VolumeTextureId);
+  glBindTexture(GL_TEXTURE_3D, this->VolumeTextureId);
 
   /// Set the texture parameters
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -615,6 +683,9 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   this->Implementation->UpdateColorTransferFunction(vol,
     scalars->GetNumberOfComponents());
 
+  /// Update noise texture
+  this->Implementation->UpdateNoiseTexture();
+
   GL_CHECK_ERRORS
 
   if (this->Implementation->HasBoundsChanged(bounds))
@@ -706,6 +777,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   glUniform1i(this->Implementation->Shader("volume"), 0);
   glUniform1i(this->Implementation->Shader("color_transfer_func"), 1);
   glUniform1i(this->Implementation->Shader("opacity_transfer_func"), 2);
+  glUniform1i(this->Implementation->Shader("noise"), 3);
 
   /// Shading is ON by default
   /// TODO Add an API to enable / disable shading if not present
@@ -721,7 +793,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   /// Bind textures
   /// Volume texture is at unit 0
   glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_3D, this->Implementation->GetVolumeTexture());
+  glBindTexture(GL_TEXTURE_3D, this->Implementation->VolumeTextureId);
 
   /// Color texture is at unit 1
   glActiveTexture(GL_TEXTURE1);
@@ -731,6 +803,10 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   /// TODO Supports only one table for now
   glActiveTexture(GL_TEXTURE2);
   this->Implementation->OpacityTables->GetTable(0)->Bind();
+
+  /// Noise texture is at unit 3
+  glActiveTexture(GL_TEXTURE3);
+  glBindTexture(GL_TEXTURE_2D, this->Implementation->NoiseTextureId);
 
   /// Look at the OpenGL Camera for the exact aspect computation
   double aspect[2];
