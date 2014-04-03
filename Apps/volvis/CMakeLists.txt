@@ -16,9 +16,3 @@ target_link_libraries(volvis
   vtkVolume
 )
 
-add_custom_command(OUTPUT "${volvis_BINARY_DIR}/shaders"
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   "${volvis_SOURCE_DIR}/shaders" "${volvis_BINARY_DIR}/shaders")
-add_custom_target(copy_shaders ALL DEPENDS "${volvis_BINARY_DIR}/shaders")
-
-add_dependencies(volvis copy_shaders)

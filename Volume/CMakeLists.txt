@@ -12,3 +12,11 @@ include(module.cmake)
 vtk_module_library(${PROJECT_NAME} ${vtkVolume_HEADERS} ${vtkVolume_SRCS})
 
 target_link_libraries(${PROJECT_NAME} LINK_PRIVATE ${GLEW_LIBRARY})
+
+add_custom_command(OUTPUT "${vtkVolume_BINARY_DIR}/shaders"
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   "${vtkVolume_SOURCE_DIR}/shaders" "${CMAKE_BINARY_DIR}/shaders")
+add_custom_target(copy_shaders ALL DEPENDS "${vtkVolume_BINARY_DIR}/shaders")
+
+add_dependencies(vtkVolume copy_shaders)
+

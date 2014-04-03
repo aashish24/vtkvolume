@@ -1,23 +1,45 @@
 #version 330 core
 
-// Object space vertex position
-layout(location = 0) in vec3 vVertex;
+// Inputs
+//
+//////////////////////////////////////////////////////////////////////////////
 
-// Object texture coordinates
-in vec2 textureCoords;
+/// Object space vertex position
+layout(location = 0) in vec3 in_vertex_pos;
 
 // Uniforms
+//
+//////////////////////////////////////////////////////////////////////////////
 
-// combined modelview projection matrix
-uniform mat4 MVP;
+/// combined modelview projection matrix
+uniform mat4 modelview_matrix;
+uniform mat4 projection_matrix;
 
-// 3D texture coordinates for texture lookup in the fragment shader
-smooth out vec3 vUV;
+uniform vec3 vol_extents_min;
+uniform vec3 vol_extents_max;
+
+// Outputs
+//
+//////////////////////////////////////////////////////////////////////////////
+
+/// 3D texture coordinates for texture lookup in the fragment shader
+smooth out vec3 texture_coords;
+smooth out vec3 vertex_pos;
 
 void main()
 {
-  //get the clipspace position
-  gl_Position = MVP*vec4(vVertex.xyz,1);
+  /// For now assume identity scene matrix
+  mat4 scene_matrix = mat4(1);
 
-  vUV = vec3(textureCoords, 1.0);
+  /// Get clipspace position
+  mat4 ogl_projection_matrix = transpose(projection_matrix);
+  mat4 ogl_modelview_matrix = transpose(modelview_matrix);
+  vec4 pos = ogl_projection_matrix * ogl_modelview_matrix * scene_matrix *
+             vec4(in_vertex_pos.xyz, 1);
+  gl_Position = pos;
+  vertex_pos = in_vertex_pos;
+
+  /// Compute texture coordinates (normalized)
+  vec3 uv = (in_vertex_pos - vol_extents_min) / (vol_extents_max - vol_extents_min);
+  texture_coords = uv;
 }
