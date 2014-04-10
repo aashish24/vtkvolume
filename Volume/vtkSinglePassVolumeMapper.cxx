@@ -774,7 +774,8 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
   /// Shading is ON by default
   /// TODO Add an API to enable / disable shading if not present
-  glUniform1i(this->Implementation->Shader("enable_shading"), 1);
+  glUniform1i(this->Implementation->Shader("enable_shading"),
+              vol->GetProperty()->GetShade(0));
   glUniform3f(this->Implementation->Shader("ambient"),
               0.0, 0.0, 0.0);
   glUniform3f(this->Implementation->Shader("diffuse"),

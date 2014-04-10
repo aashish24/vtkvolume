@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
   renWin->Render();
 
   vtkNew<vtkVolumeProperty> volumeProperty;
-  volumeProperty->ShadeOff();
+  volumeProperty->ShadeOn();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
   vtkNew<vtkVolume> volume;
