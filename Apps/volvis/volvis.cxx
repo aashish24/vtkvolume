@@ -23,6 +23,8 @@
 
 #include <vtkColorTransferFunction.h>
 #include <vtkCommand.h>
+#include <vtkFixedPointVolumeRayCastMapper.h>
+#include <vtkGPUVolumeRayCastMapper.h>
 #include <vtkPiecewiseFunction.h>
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
@@ -118,8 +120,36 @@ class vtkTimerCallback : public vtkCommand
 
 int main(int argc, char *argv[])
 {
-  vtkNew<vtkSinglePassVolumeMapper> volumeMapper;
-  volumeMapper->SetBlendModeToComposite();
+  double scalarRange[2];
+  vtkSmartPointer<vtkVolumeMapper> volumeMapper;
+
+  // Instantiate right kind of volume mapper
+  if (argc > 2)
+    {
+    std::string mapperType = argv[2];
+    if (mapperType == "-fp")
+      {
+      volumeMapper = vtkSmartPointer<vtkFixedPointVolumeRayCastMapper>(
+                       vtkFixedPointVolumeRayCastMapper::New());
+      }
+    else if (mapperType == "-gr")
+      {
+      volumeMapper = vtkSmartPointer<vtkGPUVolumeRayCastMapper>(
+                       vtkGPUVolumeRayCastMapper::New());
+      }
+    else
+      {
+      volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
+                       vtkSinglePassVolumeMapper::New());
+      }
+    }
+
+  // Deault is single pass volume mapper
+  if (!volumeMapper)
+    {
+    volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
+                     vtkSinglePassVolumeMapper::New());
+    }
 
   if (argc > 1)
     {
@@ -144,6 +174,9 @@ int main(int argc, char *argv[])
     volumeMapper->SetInputConnection(source->GetOutputPort());
     }
 
+  volumeMapper->GetInput()->GetScalarRange(scalarRange);
+  volumeMapper->SetBlendModeToComposite();
+
   vtkNew<vtkRenderWindow> renWin;
   vtkNew<vtkRenderer> ren;
   ren->SetBackground(0.2, 0.2, 0.5);
@@ -162,9 +195,17 @@ int main(int argc, char *argv[])
   volumeProperty->ShadeOn();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
+  vtkPiecewiseFunction* scalarOpacity = vtkPiecewiseFunction::New();
+
+  // Keeping the same opacity table for different mappers
+  scalarOpacity->AddPoint(scalarRange[0], 0.0);
+  scalarOpacity->AddPoint(scalarRange[1], 0.5);
+  volumeProperty->SetScalarOpacity(scalarOpacity);
+
   vtkNew<vtkVolume> volume;
-  volume->SetMapper(volumeMapper.GetPointer());
+  volume->SetMapper(volumeMapper);
   volume->SetProperty(volumeProperty.GetPointer());
+
 
   ren->AddViewProp(volume.GetPointer());
   ren->ResetCamera();
