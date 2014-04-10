@@ -22,6 +22,7 @@
 #include <vtkTestUtilities.h>
 
 #include <vtkColorTransferFunction.h>
+#include <vtkCommand.h>
 #include <vtkPiecewiseFunction.h>
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
@@ -45,6 +46,75 @@
 #include <vtkStructuredPointsReader.h>
 
 #include <vtkSinglePassVolumeMapper.h>
+
+#include <vtkTimerLog.h>
+
+#include <cstdlib>
+
+/// Testing
+class vtkTimerCallback : public vtkCommand
+{
+  public:
+    static vtkTimerCallback *New()
+    {
+      vtkTimerCallback *cb = new vtkTimerCallback;
+      cb->TimerCount = 0;
+      return cb;
+    }
+
+    void Set(vtkRenderWindow* rw, vtkRenderer* ren)
+    {
+      this->RenderWindow = rw;
+      this->Renderer = ren;
+    }
+
+    virtual void Execute(vtkObject *vtkNotUsed(caller), unsigned long eventId,
+                         void *vtkNotUsed(callData))
+    {
+      static int counter = 0;
+      static vtkNew<vtkTimerLog> timer;
+      static double totalTime = 0;
+      static double totalFrames = 0;
+
+      if (counter ==  100)
+        {
+        timer->StartTimer();
+        }
+      if (vtkCommand::TimerEvent == eventId)
+        {
+        ++this->TimerCount;
+        }
+      this->Renderer->GetActiveCamera()->Azimuth(1);
+      this->RenderWindow->Render();
+
+      if (counter >  100)
+        {
+        ++totalFrames;
+        }
+
+      ++counter;
+      if (counter == 200)
+        {
+        timer->StopTimer();
+        totalTime += timer->GetElapsedTime();
+
+        std::cerr << "totalFrames " << totalFrames << std::endl;
+        std::cerr << "totalTime " << totalTime << std::endl;
+        std::cerr << "FPS " << totalFrames / totalTime << std::endl;
+
+        totalFrames = 0;
+        timer->ResetLog();
+
+        exit(0);
+        }
+    }
+
+  private:
+    int TimerCount;
+    vtkRenderer* Renderer;
+    vtkRenderWindow* RenderWindow;
+
+};
 
 int main(int argc, char *argv[])
 {
@@ -101,6 +171,12 @@ int main(int argc, char *argv[])
 
   renWin->Render();
   ren->ResetCamera();
+
+  /// Testing code
+  vtkNew<vtkTimerCallback> cb;
+  cb->Set(renWin.GetPointer(), ren.GetPointer());
+  iren->AddObserver(vtkCommand::TimerEvent, cb.GetPointer());
+  iren->CreateRepeatingTimer(10);
 
   iren->Start();
 }
