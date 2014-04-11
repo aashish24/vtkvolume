@@ -120,51 +120,57 @@ class vtkTimerCallback : public vtkCommand
 
 int main(int argc, char *argv[])
 {
+  bool testing = false;
   double scalarRange[2];
+
   vtkSmartPointer<vtkVolumeMapper> volumeMapper;
-
-  // Instantiate right kind of volume mapper
-  if (argc > 2)
-    {
-    std::string mapperType = argv[2];
-    if (mapperType == "-fp")
-      {
-      volumeMapper = vtkSmartPointer<vtkFixedPointVolumeRayCastMapper>(
-                       vtkFixedPointVolumeRayCastMapper::New());
-      }
-    else if (mapperType == "-gr")
-      {
-      volumeMapper = vtkSmartPointer<vtkGPUVolumeRayCastMapper>(
-                       vtkGPUVolumeRayCastMapper::New());
-      }
-    else
-      {
-      volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
-                       vtkSinglePassVolumeMapper::New());
-      }
-    }
-
-  // Deault is single pass volume mapper
-  if (!volumeMapper)
-    {
-    volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
-                     vtkSinglePassVolumeMapper::New());
-    }
 
   if (argc > 1)
     {
-    std::string filename = argv[1];
-    std::string ext = vtksys::SystemTools::GetFilenameLastExtension(filename);
-    if (ext == ".vtk")
+    for (int i = 1; i < argc; ++i)
       {
-      vtkNew<vtkStructuredPointsReader> reader;
-      reader->SetFileName(argv[1]);
-      reader->Update();
-      volumeMapper->SetInputConnection(reader->GetOutputPort());
-      }
-    else
-      {
-      std::cerr << "File format " << ext << " is not supported " << std::endl;
+      std::string arg = argv[i];
+
+      if (arg == "-fp" || arg == "-gp" || arg == "-sp")
+        {
+        if (arg == "-fp")
+          {
+          volumeMapper = vtkSmartPointer<vtkFixedPointVolumeRayCastMapper>(
+                           vtkFixedPointVolumeRayCastMapper::New());
+          }
+        else if (arg == "-gp")
+          {
+          volumeMapper = vtkSmartPointer<vtkGPUVolumeRayCastMapper>(
+                           vtkGPUVolumeRayCastMapper::New());
+          }
+        else
+          {
+          volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
+                           vtkSinglePassVolumeMapper::New());
+          }
+        }
+      else if (arg == "-t")
+        {
+        testing = true;
+        }
+      else
+        {
+        // Deault is single pass volume mapper
+        if (!volumeMapper)
+          {
+          volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
+                           vtkSinglePassVolumeMapper::New());
+          }
+
+        std::string ext = vtksys::SystemTools::GetFilenameLastExtension(arg);
+        if (ext == ".vtk")
+          {
+          vtkNew<vtkStructuredPointsReader> reader;
+          reader->SetFileName(arg.c_str());
+          reader->Update();
+          volumeMapper->SetInputConnection(reader->GetOutputPort());
+          }
+        }
       }
     }
   else
@@ -214,10 +220,13 @@ int main(int argc, char *argv[])
   ren->ResetCamera();
 
   /// Testing code
-  vtkNew<vtkTimerCallback> cb;
-  cb->Set(renWin.GetPointer(), ren.GetPointer());
-  iren->AddObserver(vtkCommand::TimerEvent, cb.GetPointer());
-  iren->CreateRepeatingTimer(10);
+  if (testing)
+    {
+    vtkNew<vtkTimerCallback> cb;
+    cb->Set(renWin.GetPointer(), ren.GetPointer());
+    iren->AddObserver(vtkCommand::TimerEvent, cb.GetPointer());
+    iren->CreateRepeatingTimer(10);
+    }
 
   iren->Start();
 }
