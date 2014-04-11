@@ -475,7 +475,7 @@ int vtkSinglePassVolumeMapper::vtkInternal::UpdateColorTransferFunction(
     if (colorTransferFunction->GetSize() < 1)
       {
       colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.0, 0.0, 0.0);
-      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 0.2, 0.2, 0.2);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 1.0, 1.0, 1.0);
       }
 
     /// Activate texture 1
