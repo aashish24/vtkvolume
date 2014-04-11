@@ -202,11 +202,15 @@ int main(int argc, char *argv[])
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
   vtkPiecewiseFunction* scalarOpacity = vtkPiecewiseFunction::New();
-
   // Keeping the same opacity table for different mappers
   scalarOpacity->AddPoint(scalarRange[0], 0.0);
   scalarOpacity->AddPoint(scalarRange[1], 1.0);
   volumeProperty->SetScalarOpacity(scalarOpacity);
+
+  vtkColorTransferFunction* colorTransferFunction = volumeProperty->GetRGBTransferFunction(0);
+  colorTransferFunction->RemoveAllPoints();
+  colorTransferFunction->AddRGBPoint(scalarRange[0], 0.0, 0.0, 0.0);
+  colorTransferFunction->AddRGBPoint(scalarRange[1], 1.0, 1.0, 1.0);
 
   vtkNew<vtkVolume> volume;
   volume->SetMapper(volumeMapper);
