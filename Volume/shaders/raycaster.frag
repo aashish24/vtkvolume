@@ -34,7 +34,10 @@ uniform mat4 scene_matrix;
 
 /// Ray step size
 uniform vec3 step_size;
+
+/// Scales
 uniform vec3 cell_scale;
+uniform float scale;
 
 /// Enable / disable shading
 uniform bool enable_shading;
@@ -191,7 +194,7 @@ void main()
       break;
 
     /// Data fetching from the red channel of volume texture
-    float scalar = texture(volume, data_pos).r;
+    float scalar = texture(volume, data_pos).r * scale;
     vec4 src = vec4(texture(color_transfer_func, scalar).xyz,
                     texture(opacity_transfer_func, scalar).w);
 

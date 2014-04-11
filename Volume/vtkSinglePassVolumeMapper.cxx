@@ -165,6 +165,7 @@ public:
   double Bounds[6];
   double SampleDistance[3];
   double CellScale[3];
+  double Scale;
 
   float* NoiseTextureData;
   GLint NoiseTextureSize;
@@ -216,6 +217,7 @@ void vtkSinglePassVolumeMapper::vtkInternal::Initialize()
   this->Shader.AddUniform("camera_pos");
   this->Shader.AddUniform("light_pos");
   this->Shader.AddUniform("step_size");
+  this->Shader.AddUniform("scale");
   this->Shader.AddUniform("cell_scale");
   this->Shader.AddUniform("color_transfer_func");
   this->Shader.AddUniform("opacity_transfer_func");
@@ -376,6 +378,9 @@ bool vtkSinglePassVolumeMapper::vtkInternal::LoadVolume(vtkImageData* imageData,
         break;
       }
     }
+
+  /// Update scale
+  this->Scale = scale;
 
   int* ext = imageData->GetExtent();
   this->TextureExtents[0] = ext[0];
@@ -775,6 +780,8 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
               this->Implementation->CellScale[1],
               this->Implementation->CellScale[2]);
 
+  glUniform1f(this->Implementation->Shader("scale"), this->Implementation->Scale);
+
   glUniform1i(this->Implementation->Shader("volume"), 0);
   glUniform1i(this->Implementation->Shader("color_transfer_func"), 1);
   glUniform1i(this->Implementation->Shader("opacity_transfer_func"), 2);
@@ -787,9 +794,9 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   glUniform3f(this->Implementation->Shader("ambient"),
               0.0, 0.0, 0.0);
   glUniform3f(this->Implementation->Shader("diffuse"),
-              1.0, 1.0, 1.0);
+              0.2, 0.2, 0.2);
   glUniform3f(this->Implementation->Shader("specular"),
-              1.0, 1.0, 1.0);
+              0.2, 0.2, 0.2);
   glUniform1f(this->Implementation->Shader("shininess"), 10.0);
 
   /// Bind textures

@@ -168,7 +168,7 @@ public:
 //          this->LastSampleDistance[2] = sampleDistance[2];
 //          }
 
-        glTexImage1D(GL_TEXTURE_1D,0,GL_ALPHA16, this->TextureWidth,
+        glTexImage1D(GL_TEXTURE_1D, 0, GL_ALPHA16, this->TextureWidth,
                      this->TextureHeight, GL_ALPHA, GL_FLOAT, this->Table);
         this->Loaded = true;
         this->BuildTime.Modified();

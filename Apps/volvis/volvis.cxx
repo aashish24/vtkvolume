@@ -198,20 +198,19 @@ int main(int argc, char *argv[])
   renWin->Render();
 
   vtkNew<vtkVolumeProperty> volumeProperty;
-  volumeProperty->ShadeOff();
+  volumeProperty->ShadeOn();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
   vtkPiecewiseFunction* scalarOpacity = vtkPiecewiseFunction::New();
 
   // Keeping the same opacity table for different mappers
   scalarOpacity->AddPoint(scalarRange[0], 0.0);
-  scalarOpacity->AddPoint(scalarRange[1], 0.5);
+  scalarOpacity->AddPoint(scalarRange[1], 1.0);
   volumeProperty->SetScalarOpacity(scalarOpacity);
 
   vtkNew<vtkVolume> volume;
   volume->SetMapper(volumeMapper);
   volume->SetProperty(volumeProperty.GetPointer());
-
 
   ren->AddViewProp(volume.GetPointer());
   ren->ResetCamera();
