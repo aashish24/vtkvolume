@@ -134,7 +134,7 @@ vec3 shade()
   finalColor += specular * shininessFactor;
 
   /// clamp values otherwise we get black spots
-  finalColor = clamp(finalColor,clamp_min,clamp_max);
+  finalColor = clamp(finalColor, clamp_min, clamp_max);
 
   return finalColor;
 }
@@ -169,7 +169,7 @@ void main()
   data_pos += dir_step * texture(noise, data_pos.xy).x;
 
   /// For all samples along the ray
-  for (int i = 0; i < MAX_SAMPLES; i++) {
+  for (int i = 0; i < MAX_SAMPLES; ++i) {
     /// Advance ray by dir_step
     data_pos += dir_step;
 

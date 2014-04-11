@@ -174,7 +174,7 @@ public:
         this->BuildTime.Modified();
         }
 
-      needUpdate=needUpdate ||
+      needUpdate= needUpdate ||
         this->LastLinearInterpolation!=linearInterpolation;
       if(needUpdate)
         {

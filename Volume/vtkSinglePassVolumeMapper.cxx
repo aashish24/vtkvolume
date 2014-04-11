@@ -471,8 +471,12 @@ int vtkSinglePassVolumeMapper::vtkInternal::UpdateColorTransferFunction(
     vtkColorTransferFunction* colorTransferFunction =
       volumeProperty->GetRGBTransferFunction(0);
 
-    colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.0, 0.0, 0.0);
-    colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 0.2, 0.2, 0.2);
+    /// Add points only if its not being added before
+    if (colorTransferFunction->GetSize() < 1)
+      {
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[0], 0.0, 0.0, 0.0);
+      colorTransferFunction->AddRGBPoint(this->ScalarsRange[1], 0.2, 0.2, 0.2);
+      }
 
     /// Activate texture 1
     glActiveTexture(GL_TEXTURE1);
@@ -512,6 +516,7 @@ int vtkSinglePassVolumeMapper::vtkInternal::UpdateOpacityTransferFunction(
   vtkPiecewiseFunction* scalarOpacity = volumeProperty->GetScalarOpacity();
 
   /// TODO: Do a better job to create the default opacity map
+  /// Add points only if its not being added before
   if (scalarOpacity->GetSize() < 1)
     {
     scalarOpacity->AddPoint(this->ScalarsRange[0], 0.0);
@@ -525,7 +530,7 @@ int vtkSinglePassVolumeMapper::vtkInternal::UpdateOpacityTransferFunction(
     scalarOpacity,this->BlendMode,
     this->SampleDistance,
     this->ScalarsRange,
-    volumeProperty->GetScalarOpacityUnitDistance(0),
+    volumeProperty->GetScalarOpacityUnitDistance(),
     volumeProperty->GetInterpolationType() == VTK_LINEAR_INTERPOLATION);
 
   /// Restore default active texture
