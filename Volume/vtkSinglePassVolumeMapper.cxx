@@ -669,6 +669,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
   /// Local variables
   double bounds[6];
+  vol->Update();
   vol->GetBounds(bounds);
 
   /// Load volume data if needed
@@ -697,7 +698,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   if (this->Implementation->HasBoundsChanged(bounds))
     {
     /// Cube vertices
-    float vertices[8][3] =
+    double vertices[8][3] =
       {
       {bounds[0], bounds[2], bounds[4]}, // 0
       {bounds[1], bounds[2], bounds[4]}, // 1
@@ -737,7 +738,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
     /// Enable vertex attributre array for position
     /// and pass indices to element array  buffer
     glEnableVertexAttribArray(this->Implementation->Shader["in_vertex_pos"]);
-    glVertexAttribPointer(this->Implementation->Shader["in_vertex_pos"], 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(this->Implementation->Shader["in_vertex_pos"], 3, GL_DOUBLE, GL_FALSE, 0, 0);
 
     glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesId);
     glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
