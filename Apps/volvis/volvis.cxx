@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
   renWin->Render();
 
   vtkNew<vtkVolumeProperty> volumeProperty;
-  volumeProperty->ShadeOn();
+  volumeProperty->ShadeOff();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
   vtkPiecewiseFunction* scalarOpacity = vtkPiecewiseFunction::New();
