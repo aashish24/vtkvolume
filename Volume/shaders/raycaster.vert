@@ -25,7 +25,7 @@ uniform vec3 vol_extents_max;
 
 /// 3D texture coordinates for texture lookup in the fragment shader
 out vec3 texture_coords;
-smooth out vec3 vertex_pos;
+out vec3 vertex_pos;
 
 void main()
 {

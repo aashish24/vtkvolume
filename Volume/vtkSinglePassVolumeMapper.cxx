@@ -829,7 +829,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   /// Will require transpose of this matrix for OpenGL
   /// Fix this
   vtkMatrix4x4* projMat = ren->GetActiveCamera()->
-    GetProjectionTransformMatrix(aspect[0]/aspect[1], 0, 1);
+    GetProjectionTransformMatrix(aspect[0]/aspect[1], -1, 1);
   float projectionMat[16];
   for (int i = 0; i < 4; ++i)
     {

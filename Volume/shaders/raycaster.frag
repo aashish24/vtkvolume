@@ -8,9 +8,9 @@
 layout(location = 0) out vec4 dst;
 
 /// 3D texture coordinates form vertex shader
-smooth in vec3 texture_coords;
+in vec3 texture_coords;
 
-smooth in vec3 vertex_pos;
+in vec3 vertex_pos;
 
 /// Uniforms
 ///
