@@ -19,6 +19,12 @@ uniform mat4 scene_matrix;
 uniform vec3 vol_extents_min;
 uniform vec3 vol_extents_max;
 
+uniform vec3 texture_extents_max;
+uniform vec3 texture_extents_min;
+
+uniform vec3 texture_coord_offset;
+
+
 // Outputs
 //
 //////////////////////////////////////////////////////////////////////////////
@@ -38,6 +44,9 @@ void main()
   vertex_pos = in_vertex_pos;
 
   /// Compute texture coordinates
+  /// Assuming point data only. Also, we offset the texture coordinate to account
+  /// for OpenGL treating voxel at the center of the cell.
   vec3 uv = (in_vertex_pos - vol_extents_min) / (vol_extents_max - vol_extents_min);
-  texture_coords = uv;
+  vec3 delta = texture_extents_max - texture_extents_min;
+  texture_coords = (uv * (delta - vec3(1.0)) + vec3(0.5)) / delta;
 }
