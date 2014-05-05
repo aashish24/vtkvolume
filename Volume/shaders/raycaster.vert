@@ -22,9 +22,6 @@ uniform vec3 vol_extents_max;
 uniform vec3 texture_extents_max;
 uniform vec3 texture_extents_min;
 
-uniform vec3 texture_coord_offset;
-
-
 // Outputs
 //
 //////////////////////////////////////////////////////////////////////////////

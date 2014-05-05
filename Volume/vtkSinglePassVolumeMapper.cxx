@@ -676,11 +676,6 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
   vol->Update();
   vol->GetBounds(bounds);
 
-//  for (int kk = 0; kk < 6; ++kk)
-//    {
-//    bounds[kk] += bounds[kk] + 0.5;
-//    }
-
   /// Load volume data if needed
   if (this->Implementation->IsDataDirty(input))
     {
@@ -907,13 +902,6 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
                &(textureExtentsMin[0]));
   glUniform3fv(this->Implementation->Shader("texture_extents_max"), 1,
                &(textureExtentsMax[0]));
-
-  float offset[3] = { 0.5 / this->Implementation->TextureSize[0],
-                      0.5 / this->Implementation->TextureSize[1],
-                      0.5 / this->Implementation->TextureSize[2] };
-
-  glUniform3fv(this->Implementation->Shader("texture_coord_offset"), 1,
-               &(offset[0]));
 
   glBindVertexArray(this->Implementation->CubeVAOId);
   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);
