@@ -59,7 +59,7 @@ uniform float shininess;
 //////////////////////////////////////////////////////////////////////////////
 
 /// Total samples for each ray march step
-const int MAX_SAMPLES = 300;
+const int MAX_SAMPLES = 1024;
 
 /// Minimum texture access coordinate
 const vec3 tex_min = vec3(0);
@@ -183,9 +183,6 @@ void main()
 
   /// For all samples along the ray
   for (int i = 0; i < MAX_SAMPLES; ++i) {
-    /// Advance ray by dir_step
-    data_pos += dir_step;
-
     /// The two constants tex_min and tex_max have a value of vec3(-1,-1,-1)
     /// and vec3(1,1,1) respectively. To determine if the data value is
     /// outside the volume data, we use the sign function. The sign function
@@ -200,8 +197,9 @@ void main()
     stop = dot(sign(data_pos - tex_min), sign(tex_max - data_pos)) < 3.0;
 
     //if the stopping condition is true we brek out of the ray marching loop
-    if (stop)
+    if (stop) {
       break;
+    }
 
     /// Data fetching from the red channel of volume texture
     float scalar = texture(volume, data_pos).r * scale;
@@ -225,7 +223,11 @@ void main()
     /// Early ray termination
     /// if the currently composited colour alpha is already fully saturated
     /// we terminated the loop
-    if(dst.a > (1 - 1/255.0))
+    if(dst.a > (1 - 1/255.0)) {
       break;
+    }
+
+    /// Advance ray by dir_step
+    data_pos += dir_step;
   }
 }

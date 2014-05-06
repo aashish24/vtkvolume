@@ -43,7 +43,7 @@ void main()
   /// Compute texture coordinates
   /// Assuming point data only. Also, we offset the texture coordinate to account
   /// for OpenGL treating voxel at the center of the cell.
-  vec3 uv = (in_vertex_pos - vol_extents_min) / (vol_extents_max - vol_extents_min);
+  vec3 uvx = (in_vertex_pos - vol_extents_min) / (vol_extents_max - vol_extents_min);
   vec3 delta = texture_extents_max - texture_extents_min;
-  texture_coords = (uv * (delta - vec3(1.0)) + vec3(0.5)) / delta;
+  texture_coords = (uvx * (delta - vec3(1.0)) + vec3(0.5)) / delta;
 }
