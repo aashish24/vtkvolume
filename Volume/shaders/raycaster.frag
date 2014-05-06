@@ -225,7 +225,7 @@ void main()
     /// Early ray termination
     /// if the currently composited colour alpha is already fully saturated
     /// we terminated the loop
-    if(dst.a > 0.99)
+    if(dst.a > (1 - 1/255.0))
       break;
   }
 }
