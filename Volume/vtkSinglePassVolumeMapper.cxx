@@ -140,6 +140,11 @@ public:
   void UpdateNoiseTexture();
 
   ///
+  /// \brief UpdateVolumeGeometry
+  ///
+  void UpdateVolumeGeometry(double* bounds);
+
+  ///
   /// Private member variables
 
   bool Initialized;
@@ -609,6 +614,60 @@ void vtkSinglePassVolumeMapper::vtkInternal::UpdateNoiseTexture()
 }
 
 //--------------------------------------------------------------------------
+void vtkSinglePassVolumeMapper::vtkInternal::UpdateVolumeGeometry(double* bounds)
+{
+  /// Cube vertices
+  double vertices[8][3] =
+    {
+    {bounds[0], bounds[2], bounds[4]}, // 0
+    {bounds[1], bounds[2], bounds[4]}, // 1
+    {bounds[1], bounds[3], bounds[4]}, // 2
+    {bounds[0], bounds[3], bounds[4]}, // 3
+    {bounds[0], bounds[2], bounds[5]}, // 4
+    {bounds[1], bounds[2], bounds[5]}, // 5
+    {bounds[1], bounds[3], bounds[5]}, // 6
+    {bounds[0], bounds[3], bounds[5]}  // 7
+    };
+
+  /// Cube indices
+  GLushort cubeIndices[36]=
+    {
+    0,5,4, // bottom
+    5,0,1, // bottom
+    3,7,6, // top
+    3,6,2, // op
+    7,4,6, // front
+    6,4,5, // front
+    2,1,3, // left side
+    3,1,0, // left side
+    3,0,7, // right side
+    7,0,4, // right side
+    6,5,2, // back
+    2,5,1  // back
+    };
+
+  glBindVertexArray(this->CubeVAOId);
+
+  /// Pass cube vertices to buffer object memory
+  glBindBuffer (GL_ARRAY_BUFFER, this->CubeVBOId);
+  glBufferData (GL_ARRAY_BUFFER, sizeof(vertices), &(vertices[0][0]), GL_STATIC_DRAW);
+
+  GL_CHECK_ERRORS
+
+  /// Enable vertex attributre array for position
+  /// and pass indices to element array  buffer
+  glEnableVertexAttribArray(this->Shader["in_vertex_pos"]);
+  glVertexAttribPointer(this->Shader["in_vertex_pos"], 3, GL_DOUBLE, GL_FALSE, 0, 0);
+
+  glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->CubeIndicesId);
+  glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
+
+  GL_CHECK_ERRORS
+
+  glBindVertexArray(0);
+}
+
+//--------------------------------------------------------------------------
 ///
 /// \brief vtkSinglePassVolumeMapper::vtkSinglePassVolumeMapper
 ///
@@ -701,55 +760,7 @@ void vtkSinglePassVolumeMapper::Render(vtkRenderer* ren, vtkVolume* vol)
 
   if (this->Implementation->HasBoundsChanged(bounds))
     {
-    /// Cube vertices
-    double vertices[8][3] =
-      {
-      {bounds[0], bounds[2], bounds[4]}, // 0
-      {bounds[1], bounds[2], bounds[4]}, // 1
-      {bounds[1], bounds[3], bounds[4]}, // 2
-      {bounds[0], bounds[3], bounds[4]}, // 3
-      {bounds[0], bounds[2], bounds[5]}, // 4
-      {bounds[1], bounds[2], bounds[5]}, // 5
-      {bounds[1], bounds[3], bounds[5]}, // 6
-      {bounds[0], bounds[3], bounds[5]}  // 7
-      };
-
-    /// Cube indices
-    GLushort cubeIndices[36]=
-      {
-      0,5,4, // bottom
-      5,0,1, // bottom
-      3,7,6, // top
-      3,6,2, // op
-      7,4,6, // front
-      6,4,5, // front
-      2,1,3, // left side
-      3,1,0, // left side
-      3,0,7, // right side
-      7,0,4, // right side
-      6,5,2, // back
-      2,5,1  // back
-      };
-
-    glBindVertexArray(this->Implementation->CubeVAOId);
-
-    /// Pass cube vertices to buffer object memory
-    glBindBuffer (GL_ARRAY_BUFFER, this->Implementation->CubeVBOId);
-    glBufferData (GL_ARRAY_BUFFER, sizeof(vertices), &(vertices[0][0]), GL_STATIC_DRAW);
-
-    GL_CHECK_ERRORS
-
-    /// Enable vertex attributre array for position
-    /// and pass indices to element array  buffer
-    glEnableVertexAttribArray(this->Implementation->Shader["in_vertex_pos"]);
-    glVertexAttribPointer(this->Implementation->Shader["in_vertex_pos"], 3, GL_DOUBLE, GL_FALSE, 0, 0);
-
-    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, this->Implementation->CubeIndicesId);
-    glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), &cubeIndices[0], GL_STATIC_DRAW);
-
-    GL_CHECK_ERRORS
-
-    glBindVertexArray(0);
+    this->Implementation->UpdateVolumeGeometry(bounds);
     }
 
   /// Enable depth test
