@@ -48,7 +48,6 @@ include(${VTK_USE_FILE})
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${VTK_CMAKE_DIR})
 include(vtkExternalModuleMacros)
 
-add_subdirectory(Volume)
 add_subdirectory(OpenGL)
 add_subdirectory(Testing)
 add_subdirectory(Apps)
