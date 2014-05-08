@@ -19,7 +19,7 @@
 #include <vtkSphere.h>
 #include <vtkSampleFunction.h>
 
-#include <vtkTestUtilities.h>
+//#include <vtkTestUtilities.h>
 
 #include <vtkColorTransferFunction.h>
 #include <vtkCommand.h>
@@ -31,7 +31,7 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkVolumeProperty.h>
 #include <vtkCamera.h>
-#include <vtkRegressionTestImage.h>
+//#include <vtkRegressionTestImage.h>
 #include <vtkImageShiftScale.h>
 #include <vtkImageData.h>
 #include <vtkPointData.h>

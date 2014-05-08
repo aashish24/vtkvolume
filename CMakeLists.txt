@@ -10,6 +10,7 @@ set(VTK_REQUIRED_COMPONENTS
   vtkImagingCore
   vtkIOCore
   vtkViewsCore
+  vtkVolume
   # Additional features
   vtkPython
   vtkWrappingPythonCore
@@ -39,7 +40,6 @@ set(VTK_REQUIRED_COMPONENTS
   vtkRenderingOpenGL
   vtkRenderingVolumeOpenGL
   vtksys
-  vtkTestingRendering
   vtkViewsContext2D
 )
 find_package(VTK NO_MODULE REQUIRED COMPONENTS ${VTK_REQUIRED_COMPONENTS})

@@ -12,7 +12,7 @@ include_directories(SYSTEM
 target_link_libraries(volvis
   vtkRenderingVolumeOpenGL vtkRenderingOpenGL vtkFiltersGeneral
   vtkImagingHybrid vtkRenderingFreeTypeOpenGL vtkInteractionStyle
-  vtkTestingRendering vtkFiltersSources vtksys vtkIOLegacy
+  vtkFiltersSources vtksys vtkIOLegacy
   vtkVolume
 )
 
