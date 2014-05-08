@@ -21,6 +21,7 @@
 
 //#include <vtkTestUtilities.h>
 
+#include <vtkImageChangeInformation.h>
 #include <vtkColorTransferFunction.h>
 #include <vtkCommand.h>
 #include <vtkFixedPointVolumeRayCastMapper.h>
@@ -49,7 +50,9 @@
 
 #include <vtkSinglePassVolumeMapper.h>
 
+#include <vtkOutlineFilter.h>
 #include <vtkTimerLog.h>
+#include <vtkXMLImageDataReader.h>
 
 #include <cstdlib>
 
@@ -123,6 +126,9 @@ int main(int argc, char *argv[])
   bool testing = false;
   double scalarRange[2];
 
+  vtkNew<vtkActor> outlineActor;
+  vtkNew<vtkPolyDataMapper> outlineMapper;
+
   vtkSmartPointer<vtkVolumeMapper> volumeMapper;
 
   if (argc > 1)
@@ -170,6 +176,25 @@ int main(int argc, char *argv[])
           reader->Update();
           volumeMapper->SetInputConnection(reader->GetOutputPort());
           }
+        else if (ext == ".vti")
+          {
+          vtkNew<vtkXMLImageDataReader> reader;
+          reader->SetFileName(arg.c_str());
+          reader->Update();
+
+          vtkNew<vtkImageChangeInformation> changeInformation;
+          changeInformation->SetInputConnection(reader->GetOutputPort());
+          changeInformation->SetOutputSpacing(1, 2, 3);
+          changeInformation->SetOutputOrigin(10, 20, 30);
+          changeInformation->Update();
+          volumeMapper->SetInputConnection(changeInformation->GetOutputPort());
+
+          // Add outline filter
+          vtkNew<vtkOutlineFilter> outlineFilter;
+          outlineFilter->SetInputConnection(changeInformation->GetOutputPort());
+          outlineMapper->SetInputConnection(outlineFilter->GetOutputPort());
+          outlineActor->SetMapper(outlineMapper.GetPointer());
+          }
         }
       }
     }
@@ -216,7 +241,12 @@ int main(int argc, char *argv[])
   volume->SetMapper(volumeMapper);
   volume->SetProperty(volumeProperty.GetPointer());
 
+  /// TODO this will break the code
+//  volume->RotateY(45.0);
+//  outlineActor->RotateY(45.0);
+
   ren->AddViewProp(volume.GetPointer());
+  ren->AddActor(outlineActor.GetPointer());
   ren->ResetCamera();
 
   renWin->Render();
