@@ -2,7 +2,7 @@ project(volvis)
 
 set(VOLVIS_SRCS volvis.cxx)
 
-add_executable(volvis  "${VOLVIS_SRCS}")
+add_executable(volvis "${VOLVIS_SRCS}")
 
 include_directories(SYSTEM
   ${VTK_INCLUDE_DIRS}

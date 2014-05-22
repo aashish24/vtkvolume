@@ -232,7 +232,8 @@ int main(int argc, char *argv[])
   scalarOpacity->AddPoint(scalarRange[1], 1.0);
   volumeProperty->SetScalarOpacity(scalarOpacity);
 
-  vtkColorTransferFunction* colorTransferFunction = volumeProperty->GetRGBTransferFunction(0);
+  vtkColorTransferFunction* colorTransferFunction =
+    volumeProperty->GetRGBTransferFunction(0);
   colorTransferFunction->RemoveAllPoints();
   colorTransferFunction->AddRGBPoint(scalarRange[0], 0.0, 0.0, 0.0);
   colorTransferFunction->AddRGBPoint(scalarRange[1], 1.0, 1.0, 1.0);
@@ -241,9 +242,9 @@ int main(int argc, char *argv[])
   volume->SetMapper(volumeMapper);
   volume->SetProperty(volumeProperty.GetPointer());
 
-  /// TODO this will break the code
-//  volume->RotateY(45.0);
-//  outlineActor->RotateY(45.0);
+  /// Rotate the volume for testing purposes
+  volume->RotateY(45.0);
+  outlineActor->RotateY(45.0);
 
   ren->AddViewProp(volume.GetPointer());
   ren->AddActor(outlineActor.GetPointer());
