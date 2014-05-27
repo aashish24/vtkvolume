@@ -116,8 +116,8 @@ class vtkTimerCallback : public vtkCommand
 
   private:
     int TimerCount;
-    vtkRenderer* Renderer;
-    vtkRenderWindow* RenderWindow;
+    vtkSmartPointer<vtkRenderer> Renderer;
+    vtkSmartPointer<vtkRenderWindow> RenderWindow;
 
 };
 
@@ -126,9 +126,9 @@ int main(int argc, char *argv[])
   bool testing = false;
   double scalarRange[2];
 
-  vtkNew<vtkActor> outlineActor;
-  vtkNew<vtkPolyDataMapper> outlineMapper;
-
+  vtkSmartPointer<vtkActor> outlineActor = vtkSmartPointer<vtkActor>::New();
+  vtkSmartPointer<vtkPolyDataMapper> outlineMapper =
+    vtkSmartPointer<vtkPolyDataMapper>::New();
   vtkSmartPointer<vtkVolumeMapper> volumeMapper;
 
   if (argc > 1)
@@ -141,18 +141,15 @@ int main(int argc, char *argv[])
         {
         if (arg == "-fp")
           {
-          volumeMapper = vtkSmartPointer<vtkFixedPointVolumeRayCastMapper>(
-                           vtkFixedPointVolumeRayCastMapper::New());
+          volumeMapper = vtkSmartPointer<vtkFixedPointVolumeRayCastMapper>::New();
           }
         else if (arg == "-gp")
           {
-          volumeMapper = vtkSmartPointer<vtkGPUVolumeRayCastMapper>(
-                           vtkGPUVolumeRayCastMapper::New());
+          volumeMapper = vtkSmartPointer<vtkGPUVolumeRayCastMapper>::New();
           }
         else
           {
-          volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
-                           vtkSinglePassVolumeMapper::New());
+          volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>::New();
           }
         }
       else if (arg == "-t")
@@ -164,8 +161,7 @@ int main(int argc, char *argv[])
         // Deault is single pass volume mapper
         if (!volumeMapper)
           {
-          volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>(
-                           vtkSinglePassVolumeMapper::New());
+          volumeMapper = vtkSmartPointer<vtkSinglePassVolumeMapper>::New();
           }
 
         std::string ext = vtksys::SystemTools::GetFilenameLastExtension(arg);
@@ -178,11 +174,13 @@ int main(int argc, char *argv[])
           }
         else if (ext == ".vti")
           {
-          vtkNew<vtkXMLImageDataReader> reader;
+          vtkSmartPointer<vtkXMLImageDataReader> reader =
+            vtkSmartPointer<vtkXMLImageDataReader>::New();
           reader->SetFileName(arg.c_str());
           reader->Update();
 
-          vtkNew<vtkImageChangeInformation> changeInformation;
+          vtkSmartPointer<vtkImageChangeInformation> changeInformation =
+            vtkSmartPointer<vtkImageChangeInformation>::New();
           changeInformation->SetInputConnection(reader->GetOutputPort());
           changeInformation->SetOutputSpacing(1, 2, 3);
           changeInformation->SetOutputOrigin(10, 20, 30);
@@ -190,17 +188,19 @@ int main(int argc, char *argv[])
           volumeMapper->SetInputConnection(changeInformation->GetOutputPort());
 
           // Add outline filter
-          vtkNew<vtkOutlineFilter> outlineFilter;
+          vtkSmartPointer<vtkOutlineFilter> outlineFilter =
+            vtkSmartPointer<vtkOutlineFilter>::New();
           outlineFilter->SetInputConnection(changeInformation->GetOutputPort());
           outlineMapper->SetInputConnection(outlineFilter->GetOutputPort());
-          outlineActor->SetMapper(outlineMapper.GetPointer());
+          outlineActor->SetMapper(outlineMapper);
           }
         }
       }
     }
   else
     {
-    vtkNew<vtkRTAnalyticSource> source;
+    vtkSmartPointer<vtkRTAnalyticSource> source =
+      vtkSmartPointer<vtkRTAnalyticSource>::New();
     source->Update();
     volumeMapper->SetInputConnection(source->GetOutputPort());
     }
@@ -208,25 +208,30 @@ int main(int argc, char *argv[])
   volumeMapper->GetInput()->GetScalarRange(scalarRange);
   volumeMapper->SetBlendModeToComposite();
 
-  vtkNew<vtkRenderWindow> renWin;
-  vtkNew<vtkRenderer> ren;
+  vtkSmartPointer<vtkRenderWindow> renWin =
+    vtkSmartPointer<vtkRenderWindow>::New();
+  vtkSmartPointer<vtkRenderer> ren =
+    vtkSmartPointer<vtkRenderer>::New();
   ren->SetBackground(0.2, 0.2, 0.5);
 
   // Intentional odd and NPOT  width/height
-  renWin->AddRenderer(ren.GetPointer());
+  renWin->AddRenderer(ren);
   renWin->SetSize(800, 800);
 
-  vtkNew<vtkRenderWindowInteractor> iren;
-  iren->SetRenderWindow(renWin.GetPointer());
+  vtkSmartPointer<vtkRenderWindowInteractor> iren =
+    vtkSmartPointer<vtkRenderWindowInteractor>::New();
+  iren->SetRenderWindow(renWin);
 
   // Make sure we have an OpenGL context.
   renWin->Render();
 
-  vtkNew<vtkVolumeProperty> volumeProperty;
+  vtkSmartPointer<vtkVolumeProperty> volumeProperty =
+    vtkSmartPointer<vtkVolumeProperty>::New();
   volumeProperty->ShadeOff();
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
-  vtkPiecewiseFunction* scalarOpacity = vtkPiecewiseFunction::New();
+  vtkSmartPointer<vtkPiecewiseFunction> scalarOpacity =
+    vtkSmartPointer<vtkPiecewiseFunction>::New();
   // Keeping the same opacity table for different mappers
   scalarOpacity->AddPoint(scalarRange[0], 0.0);
   scalarOpacity->AddPoint(scalarRange[1], 1.0);
@@ -238,16 +243,16 @@ int main(int argc, char *argv[])
   colorTransferFunction->AddRGBPoint(scalarRange[0], 0.0, 0.0, 0.0);
   colorTransferFunction->AddRGBPoint(scalarRange[1], 1.0, 1.0, 1.0);
 
-  vtkNew<vtkVolume> volume;
+  vtkSmartPointer<vtkVolume> volume = vtkSmartPointer<vtkVolume>::New();
   volume->SetMapper(volumeMapper);
-  volume->SetProperty(volumeProperty.GetPointer());
+  volume->SetProperty(volumeProperty);
 
   /// Rotate the volume for testing purposes
   volume->RotateY(45.0);
   outlineActor->RotateY(45.0);
 
-  ren->AddViewProp(volume.GetPointer());
-  ren->AddActor(outlineActor.GetPointer());
+  ren->AddViewProp(volume);
+  ren->AddActor(outlineActor);
   ren->ResetCamera();
 
   renWin->Render();
@@ -257,11 +262,12 @@ int main(int argc, char *argv[])
   if (testing)
     {
     vtkNew<vtkTimerCallback> cb;
-    cb->Set(renWin.GetPointer(), ren.GetPointer());
+    cb->Set(renWin, ren);
     iren->AddObserver(vtkCommand::TimerEvent, cb.GetPointer());
     iren->CreateRepeatingTimer(10);
     }
 
+  iren->Initialize();
   iren->Start();
 }
 
