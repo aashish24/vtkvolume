@@ -251,8 +251,18 @@ int main(int argc, char *argv[])
   volume->RotateY(45.0);
   outlineActor->RotateY(45.0);
 
+  /// Add sphere for testing
+  vtkSmartPointer<vtkSphereSource> sphereSource = vtkSmartPointer<vtkSphereSource>::New();
+  sphereSource->SetCenter(100, 10, 10);
+  sphereSource->SetRadius(100.0);
+  vtkSmartPointer<vtkPolyDataMapper> sphereMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+  vtkSmartPointer<vtkActor> sphereActor = vtkSmartPointer<vtkActor>::New();
+  sphereMapper->SetInputConnection(sphereSource->GetOutputPort());
+  sphereActor->SetMapper(sphereMapper);
+
   ren->AddViewProp(volume);
   ren->AddActor(outlineActor);
+  ren->AddActor(sphereActor);
   ren->ResetCamera();
 
   renWin->Render();
