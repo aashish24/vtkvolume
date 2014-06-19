@@ -182,8 +182,8 @@ int main(int argc, char *argv[])
           vtkSmartPointer<vtkImageChangeInformation> changeInformation =
             vtkSmartPointer<vtkImageChangeInformation>::New();
           changeInformation->SetInputConnection(reader->GetOutputPort());
-          changeInformation->SetOutputSpacing(1, 2, 3);
-          changeInformation->SetOutputOrigin(10, 20, 30);
+//          changeInformation->SetOutputSpacing(1, 2, 3);
+//          changeInformation->SetOutputOrigin(10, 20, 30);
           changeInformation->Update();
           volumeMapper->SetInputConnection(changeInformation->GetOutputPort());
 
@@ -231,13 +231,13 @@ int main(int argc, char *argv[])
   volumeProperty->SetInterpolationType(VTK_LINEAR_INTERPOLATION);
 
   vtkSmartPointer<vtkPiecewiseFunction> scalarOpacity =
-    vtkSmartPointer<vtkPiecewiseFunction>::New();
-  // Keeping the same opacity table for different mappers
+    volumeProperty->GetScalarOpacity();
+  scalarOpacity->RemoveAllPoints();
   scalarOpacity->AddPoint(scalarRange[0], 0.0);
   scalarOpacity->AddPoint(scalarRange[1], 1.0);
   volumeProperty->SetScalarOpacity(scalarOpacity);
 
-  vtkColorTransferFunction* colorTransferFunction =
+  vtkSmartPointer<vtkColorTransferFunction> colorTransferFunction =
     volumeProperty->GetRGBTransferFunction(0);
   colorTransferFunction->RemoveAllPoints();
   colorTransferFunction->AddRGBPoint(scalarRange[0], 0.0, 0.0, 0.0);
@@ -246,6 +246,11 @@ int main(int argc, char *argv[])
   vtkSmartPointer<vtkVolume> volume = vtkSmartPointer<vtkVolume>::New();
   volume->SetMapper(volumeMapper);
   volume->SetProperty(volumeProperty);
+
+  /// Test cropping now
+  volumeMapper->SetCroppingRegionPlanes(10.0, 20.0, 10.0, 20.0, 10.0, 20.0);
+  volumeMapper->SetCroppingRegionFlagsToFence();
+  volumeMapper->CroppingOn();
 
   /// Rotate the volume for testing purposes
   volume->RotateY(45.0);
@@ -262,7 +267,7 @@ int main(int argc, char *argv[])
 
   ren->AddViewProp(volume);
   ren->AddActor(outlineActor);
-  ren->AddActor(sphereActor);
+//  ren->AddActor(sphereActor);
   ren->ResetCamera();
 
   renWin->Render();
